@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev (web)",
+      "type": "npm",
+      "script": "dev",
+      "problemMatcher": [],
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "detail": "Vite dev server at http://localhost:5173"
+    },
+    {
+      "label": "push (live reload to tablet)",
+      "type": "npm",
+      "script": "push",
+      "problemMatcher": [],
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "detail": "cap run android -l --external — hot reload on the connected device"
+    },
+    {
+      "label": "build",
+      "type": "npm",
+      "script": "build",
+      "problemMatcher": [],
+      "group": "build",
+      "detail": "Production web build into dist/"
+    },
+    {
+      "label": "android: rebuild + install",
+      "type": "npm",
+      "script": "android:run",
+      "problemMatcher": [],
+      "detail": "Full build + cap sync + install (use after native changes)"
+    },
+    {
+      "label": "test (watch)",
+      "type": "shell",
+      "command": "npx vitest",
+      "problemMatcher": [],
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "detail": "Runs the unit suite (requires Vitest — see TESTING.md)"
+    }
+  ]
+}

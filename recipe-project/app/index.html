@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Recipe App</title>
+
+    <!-- Fonts: Fraunces (display/serif) + DM Sans (body/UI). Two weights only per style guide. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=Fraunces:opsz,wght@9..144,500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- jeep-sqlite is the web fallback for @capacitor-community/sqlite.
+         It is a no-op on native Android (the native SQLite is used instead). -->
+    <jeep-sqlite></jeep-sqlite>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

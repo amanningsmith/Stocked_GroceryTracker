@@ -1,0 +1,15 @@
+# Root project workspace ignores. The app has its own .gitignore for build/deps.
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*.local
+
+# Testing artifacts that shouldn't be committed (keep the structure via .gitkeep,
+# ignore bulky generated output). Comment these out if you DO want to track them.
+testing/results/coverage/
+testing/evidence/**/*.mov
+testing/evidence/**/*.mp4
+
+# Nothing else here — app/ build artifacts are ignored by app/.gitignore.

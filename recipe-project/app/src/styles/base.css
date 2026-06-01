@@ -1,0 +1,70 @@
+@import './tokens.css';
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { font-family: var(--font-display); font-weight: 500; margin: 0; }
+
+button { font-family: var(--font-body); cursor: pointer; }
+
+/* ---- App shell ---- */
+.app { display: flex; flex-direction: column; height: 100%; max-width: 1024px; margin: 0 auto; }
+.screen { flex: 1; overflow-y: auto; padding: var(--pad-page); padding-bottom: 88px; }
+.screen-title { font-size: 22px; margin-bottom: 14px; }
+
+/* ---- Cards / rows: the "defined" look = hairline + warm shadow ---- */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-rest);
+  padding: var(--pad-card);
+}
+
+/* Gentle lift on tap (style guide: translateY(-2px), shadow grow, 0.18s ease — never bouncy) */
+.liftable { transition: transform 0.18s ease, box-shadow 0.18s ease; }
+.liftable:active { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+
+/* Soft fade-in for lists, slight stagger applied inline via animation-delay */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.fade-in { animation: fadeIn 0.25s ease both; }
+
+/* ---- Pills / tags / chips ---- */
+.pill { font-size: 11px; padding: 3px 9px; border-radius: var(--radius-pill); display: inline-block; }
+.tag-sage { background: var(--secondary-tint); color: var(--secondary-dark); }
+.tag-terra { background: var(--accent-tint); color: var(--accent-dark); }
+
+.chip {
+  font-size: 13px; padding: 6px 13px; border-radius: var(--radius-pill);
+  border: 1px solid var(--border-chip); background: transparent;
+  color: var(--text-secondary); transition: all 0.15s ease;
+}
+.chip.active { background: var(--accent-tint); color: var(--accent-dark); border-color: var(--accent-tint); }
+
+/* ---- Buttons ---- */
+.btn { border: none; border-radius: var(--radius-input); padding: 10px 16px; font-size: 14px; font-weight: 500; transition: transform 0.12s ease; }
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: var(--accent-strong); color: #fff; }
+.btn-secondary { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+
+/* ---- Inputs ---- */
+.input {
+  width: 100%; padding: 11px 13px; border-radius: var(--radius-input);
+  border: 1px solid var(--border-hairline); background: var(--bg-card);
+  color: var(--text-primary); font-family: var(--font-body); font-size: 14px;
+}
+.input::placeholder { color: var(--text-hint); }
+
+.meta { color: var(--text-secondary); font-size: 13px; }
+.muted { color: var(--text-secondary); }
+.row-flex { display: flex; align-items: center; gap: 10px; }

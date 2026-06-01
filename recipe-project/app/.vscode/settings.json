@@ -1,0 +1,26 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.tabSize": 2,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[javascriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[css]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+
+  // The SQLite wasm and build output are noise in search/explorer.
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/android": true,
+    "public/sql-wasm.wasm": true
+  },
+  "files.associations": {
+    "*.css": "css"
+  }
+}

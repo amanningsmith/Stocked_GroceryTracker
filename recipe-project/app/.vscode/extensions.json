@@ -1,0 +1,14 @@
+{
+  "// note": "VS Code prompts to install these when you open the folder.",
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "dsznajder.es7-react-js-snippets",
+    "ms-vscode.vscode-typescript-next",
+    "msjsdiff.es6-string-html",
+    "ionic.ionic",
+    "redhat.vscode-yaml",
+    "christian-kohler.npm-intellisense",
+    "streetsidesoftware.code-spell-checker"
+  ]
+}
