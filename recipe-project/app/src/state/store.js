@@ -27,13 +27,27 @@ export async function searchLocal(text) {
     [q, q],
   );
 }
+export async function getImportedRecipes() {
+  // Get all recipes with source = 'imported' for feed display
+  return query('SELECT * FROM recipe WHERE source = ? ORDER BY name', ['imported']);
+}
+export async function deleteRecipe(id) {
+  // Delete recipe and any associated favorites/meals
+  await run('DELETE FROM favorite WHERE recipeId = ?', [id]);
+  await run('DELETE FROM meal_entry WHERE recipeId = ?', [id]);
+  await run('DELETE FROM recipe WHERE id = ?', [id]);
+}
 
 // ---- Favorites ----
-export async function toggleFavorite(recipeId) {
+export async function toggleFavorite(recipeId, recipe = null) {
   const rows = await query('SELECT recipeId FROM favorite WHERE recipeId = ?', [recipeId]);
   if (rows.length) {
     await run('DELETE FROM favorite WHERE recipeId = ?', [recipeId]);
     return false;
+  }
+  // When favoriting, cache the full recipe data (if provided) so it can be viewed offline
+  if (recipe) {
+    await saveRecipe(recipe);
   }
   await run('INSERT INTO favorite (recipeId, addedAt) VALUES (?, ?)', [recipeId, Date.now()]);
   return true;

@@ -21,8 +21,14 @@ export async function initDb() {
   // On web, @capacitor-community/sqlite runs through the <jeep-sqlite> element
   // and an IndexedDB-backed store. This is dev-only; native Android uses real SQLite.
   if (Capacitor.getPlatform() === 'web') {
+    // Ensure jeep-sqlite custom element is defined and appended to DOM before initializing
     await customElements.whenDefined('jeep-sqlite');
-    const jeep = document.querySelector('jeep-sqlite');
+    let jeep = document.querySelector('jeep-sqlite');
+    if (!jeep) {
+      jeep = document.createElement('jeep-sqlite');
+      jeep.setAttribute('wasmpath', '/wasm');
+      document.body.appendChild(jeep);
+    }
     await jeep.componentOnReady?.();
     await sqlite.initWebStore();
   }

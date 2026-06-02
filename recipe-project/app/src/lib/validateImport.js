@@ -29,7 +29,7 @@ export function validateImport(raw) {
 
   // ---- Top-level fields ----
   req(isStr(data.name), 'name: required string');
-  req(data.source === 'imported', 'source: must be the literal "imported"');
+  // source will be added by ImportScreen, not required in input JSON
   req(isStr(data.cuisine), 'cuisine: required string');
   req(isStr(data.method), 'method: required string (e.g. Skillet, Oven, Grill)');
   req(isNum(data.totalTimeMinutes), 'totalTimeMinutes: required number');

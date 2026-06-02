@@ -1,17 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import RecipeRow from '../components/RecipeRow';
 import AddToWeek from '../components/AddToWeek';
 import { searchRecipes, getRecipe } from '../api/spoonacular';
-import { saveRecipe } from '../state/store';
+import { saveRecipe, searchLocal, getImportedRecipes, deleteRecipe } from '../state/store';
 import { sortByOverlap } from '../lib/overlap';
 import { currentWeek } from '../lib/weeks';
 import { weekRecipesWithServings } from '../state/store';
 
 // Seven filters per spec MVP1.
-const CUISINES = ['Italian', 'Mexican', 'Indian', 'Chinese', 'Thai', 'Japanese', 'Mediterranean', 'American', 'French'];
-const PROTEINS = ['chicken', 'beef', 'pork', 'fish', 'shrimp', 'tofu', 'turkey', 'lamb'];
-const METHODS = ['bake', 'grill', 'sauté', 'roast', 'slow cook', 'stir fry'];
-const DIETS = ['vegetarian', 'vegan', 'gluten free', 'dairy free'];
+const CUISINES = ['Italian', 'Mexican', 'Indian', 'Chinese', 'Thai', 'Japanese', 'Mediterranean', 'American', 'French', 'Greek', 'Korean'];
+const PROTEINS = ['chicken', 'beef', 'pork', 'fish', 'shrimp', 'tofu', 'turkey', 'lamb', 'seafood', 'vegetarian', 'vegan'];
+const METHODS = ['bake', 'grill', 'sauté', 'roast', 'slow cook', 'stir fry', 'skillet', 'oven', 'simmer', 'wok', 'braise'];
+const DIETS = ['vegetarian', 'vegan', 'gluten free', 'dairy free', 'low-carb'];
 const MEAL_TYPES = ['main course', 'side dish', 'soup', 'salad'];
 const TIMES = [15, 30, 45, 60];
 
@@ -29,6 +29,12 @@ export default function FinderScreen({ onOpen }) {
   const [err, setErr] = useState('');
   const [addTarget, setAddTarget] = useState(null);
   const [overlapSort, setOverlapSort] = useState(false);
+  const [hideImported, setHideImported] = useState(false);
+
+  // Auto-load recipes on mount
+  useEffect(() => {
+    run(true);
+  }, []);
 
   const toggle = (key, val) => setF((p) => ({ ...p, [key]: p[key] === val ? undefined : val }));
 
@@ -36,18 +42,76 @@ export default function FinderScreen({ onOpen }) {
     setLoading(true); setErr('');
     const nextOffset = reset ? 0 : offset + 100;
     try {
-      const { results: r, total: t } = await searchRecipes({
-        query: text || undefined,
-        cuisine: f.cuisine, protein: f.protein, mealType: f.mealType,
-        diet: f.diet, maxTime: f.maxTime, number: 100, offset: nextOffset,
-      });
-      // Cache to SQLite so re-browsing doesn't re-spend quota (spec §2).
-      for (const rec of r) await saveRecipe(rec);
-      let merged = reset ? r : [...results, ...r];
-      if (overlapSort) merged = await applyOverlap(merged);
-      setResults(merged); setTotal(t); setOffset(nextOffset);
+      let apiResults = [];
+      let localResults = [];
+
+      // Always load imported recipes from local DB
+      try {
+        const importedRecipes = await getImportedRecipes();
+        localResults = importedRecipes;
+      } catch (e) {
+        console.error('Failed to load imported recipes:', e);
+      }
+
+      // Search API if there's a query or filters
+      if (text || Object.keys(f).length > 0) {
+        try {
+          const { results: r, total: t } = await searchRecipes({
+            query: text || undefined,
+            cuisine: f.cuisine, protein: f.protein, mealType: f.mealType,
+            diet: f.diet, maxTime: f.maxTime, number: 100, offset: nextOffset,
+          });
+          // Cache to SQLite so re-browsing doesn't re-spend quota (spec §2).
+          for (const rec of r) await saveRecipe(rec);
+          apiResults = r;
+          setTotal(t);
+        } catch (e) {
+          setErr(e.message);
+        }
+      }
+
+      // If there's search text, also search local for matching ingredients
+      if (text) {
+        try {
+          const searchResults = await searchLocal(text);
+          // Merge with imported recipes, avoiding duplicates
+          const imported = searchResults.filter(r => r.source === 'imported');
+          localResults = imported;
+        } catch (e) {
+          console.error('Failed to search local:', e);
+        }
+      }
+
+      // Merge results, removing duplicates (prefer API version if exists)
+      const seen = new Set();
+      let merged = [];
+      for (const rec of [...apiResults, ...localResults]) {
+        if (!seen.has(rec.id)) {
+          seen.add(rec.id);
+          merged.push(rec);
+        }
+      }
+
+      // Apply hideImported filter
+      if (hideImported) {
+        merged = merged.filter(r => r.source !== 'imported');
+      }
+
+      // Paginate: show 100 per page
+      if (!reset) {
+        merged = [...results, ...merged];
+      }
+      
+      if (overlapSort && merged.length > 0) {
+        merged = await applyOverlap(merged);
+      }
+
+      setResults(merged);
+      setOffset(nextOffset);
     } catch (e) {
-      setErr(e.message);
+      if (e.message && !e.message.includes('quota')) {
+        setErr(e.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -58,6 +122,15 @@ export default function FinderScreen({ onOpen }) {
     if (!w) return list;
     const weekRecipes = (await weekRecipesWithServings(w.id)).map((x) => x.recipe);
     return sortByOverlap(list, weekRecipes).map((x) => x.recipe);
+  }
+
+  async function handleDelete(recipeId) {
+    try {
+      await deleteRecipe(recipeId);
+      setResults(prev => prev.filter(r => r.id !== recipeId));
+    } catch (e) {
+      setErr('Failed to delete recipe: ' + e.message);
+    }
   }
 
   async function open(recipe) {
@@ -97,14 +170,18 @@ export default function FinderScreen({ onOpen }) {
           <input type="checkbox" checked={overlapSort} onChange={(e) => setOverlapSort(e.target.checked)} />
           Sort by shared ingredients with this week
         </label>
+        <label className="meta" style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+          <input type="checkbox" checked={hideImported} onChange={(e) => { setHideImported(e.target.checked); }} />
+          Hide imported recipes
+        </label>
       </details>
 
       {err && <p style={{ color: 'var(--accent-dark)' }}>{err}</p>}
       {loading && <p className="meta">Loading…</p>}
 
-      {results.map((r, i) => (
+      {results.filter(r => !hideImported || r.source !== 'imported').map((r, i) => (
         <RecipeRow key={r.id} recipe={r} delay={Math.min(i, 12) * 30}
-          onOpen={open} onAdd={(rec) => setAddTarget(rec)} />
+          onOpen={open} onAdd={(rec) => setAddTarget(rec)} onDelete={handleDelete} />
       ))}
 
       {results.length > 0 && results.length < total && (

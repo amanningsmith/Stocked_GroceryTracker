@@ -4,7 +4,7 @@ import { isFavorite, toggleFavorite } from '../state/store';
 // Compact, defined row-card (style guide: Recipe row, MVP1).
 // 54px thumb (or cuisine-initial tile for imported/no-photo), Fraunces name,
 // meta line, macro-contributor pills, favorite + add-to-week on the right rail.
-export default function RecipeRow({ recipe, onOpen, onAdd, delay = 0 }) {
+export default function RecipeRow({ recipe, onOpen, onAdd, onDelete, delay = 0 }) {
   const [fav, setFav] = useState(false);
   useEffect(() => { isFavorite(recipe.id).then(setFav); }, [recipe.id]);
 
@@ -33,6 +33,7 @@ export default function RecipeRow({ recipe, onOpen, onAdd, delay = 0 }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: 16 }}>{recipe.name}</span>
           {recipe.source === 'imported' && <span className="pill tag-sage">imported</span>}
+          {recipe.source === 'spoonacular' && <span className="pill tag-terra">spoonacular</span>}
         </div>
         <div className="meta" style={{ margin: '2px 0 6px' }}>
           {[recipe.cuisine, recipe.totalTimeMinutes && `${recipe.totalTimeMinutes} min`, recipe.difficulty]
@@ -48,7 +49,7 @@ export default function RecipeRow({ recipe, onOpen, onAdd, delay = 0 }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
         <button
           aria-label="favorite"
-          onClick={(e) => { e.stopPropagation(); toggleFavorite(recipe.id).then(setFav); }}
+          onClick={(e) => { e.stopPropagation(); toggleFavorite(recipe.id, recipe).then(setFav); }}
           style={{ background: 'none', border: 'none', fontSize: 20, lineHeight: 1, color: fav ? 'var(--accent)' : 'var(--icon-inactive)' }}
         >{fav ? '♥' : '♡'}</button>
         <button
@@ -56,6 +57,13 @@ export default function RecipeRow({ recipe, onOpen, onAdd, delay = 0 }) {
           onClick={(e) => { e.stopPropagation(); onAdd?.(recipe); }}
           style={{ background: 'none', border: 'none', fontSize: 22, lineHeight: 1, color: 'var(--icon-inactive)' }}
         >+</button>
+        {recipe.source === 'imported' && (
+          <button
+            aria-label="delete recipe"
+            onClick={(e) => { e.stopPropagation(); if (window.confirm('Delete this recipe?')) onDelete?.(recipe.id); }}
+            style={{ background: 'none', border: 'none', fontSize: 18, lineHeight: 1, color: 'var(--icon-inactive)' }}
+          >🗑️</button>
+        )}
       </div>
     </div>
   );
