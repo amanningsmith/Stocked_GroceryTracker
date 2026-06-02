@@ -14,9 +14,9 @@
     />
   </head>
   <body>
-    <!-- jeep-sqlite is the web fallback for @capacitor-community/sqlite.
-         It is a no-op on native Android (the native SQLite is used instead). -->
-    <jeep-sqlite></jeep-sqlite>
+        <!-- jeep-sqlite is the web fallback for @capacitor-community/sqlite.
+          It is a no-op on native Android (the native SQLite is used instead). -->
+        <jeep-sqlite wasmpath="/node_modules/.pnpm/sql.js@1.14.1/node_modules/sql.js/dist"></jeep-sqlite>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
