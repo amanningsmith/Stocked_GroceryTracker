@@ -54,6 +54,17 @@ export async function searchRecipes(filters = {}) {
   };
 }
 
+// ---- Fetch just the image URL for an imported recipe by searching its name.
+//      Costs 1 quota point; caller should only invoke when recipe.image is null. ----
+export async function fetchImageForName(name) {
+  try {
+    const data = await get('/recipes/complexSearch', { query: name, number: 1 });
+    return data.results?.[0]?.image || null;
+  } catch {
+    return null;
+  }
+}
+
 // ---- Full recipe with ingredients + analyzed instructions (detail/cooking). ----
 export async function getRecipe(id) {
   const info = await get(`/recipes/${id}/information`, { includeNutrition: false });
@@ -72,24 +83,36 @@ function dietaryTags(r) {
   return tags;
 }
 
-// Lightweight shape from complexSearch (enough for the finder card).
+// Full shape from complexSearch — addRecipeInformation+fillIngredients already returns
+// extendedIngredients with amounts/units/aisle, so we populate ingredients here at no
+// extra quota cost. Steps remain [] until the recipe is opened (analyzedInstructions call).
 function normalizeSearchResult(r) {
-  const ings = (r.extendedIngredients || r.missedIngredients || []).map((i) => i.name);
+  const ingredients = (r.extendedIngredients || []).map((i) => ({
+    name: i.nameClean || i.name,
+    amount: i.measures?.us?.amount ?? i.amount ?? null,
+    unit: i.measures?.us?.unitShort ?? i.unit ?? '',
+    section: aisleToSection(i.aisle),
+    isStaple: false,
+  }));
+  const ingNames = ingredients.length
+    ? ingredients.map((i) => i.name)
+    : (r.missedIngredients || []).map((i) => i.name);
   return {
     id: `sp_${r.id}`,
     source: 'spoonacular',
     name: r.title,
     image: r.image || null,
     cuisine: (r.cuisines && r.cuisines[0]) || 'Other',
-    method: 'unknown',
+    method: (r.dishTypes && r.dishTypes[0]) || 'unknown',
     totalTimeMinutes: r.readyInMinutes || null,
-    protein: ings.find((n) => /chicken|beef|pork|fish|tofu|shrimp|turkey|lamb/i.test(n)) || '',
+    protein: ingNames.find((n) => /chicken|beef|pork|fish|tofu|shrimp|turkey|lamb/i.test(n)) || '',
     dietaryTags: dietaryTags(r),
     difficulty: 'medium',
     servings: r.servings || 2,
-    // top headline ingredients for the card (protein/carb, not spices) — best effort
-    macroContributors: ings.slice(0, 5),
-    ingredients: [],
+    description: r.summary ? r.summary.replace(/<[^>]+>/g, '') : '',
+    tip: '',
+    macroContributors: ingNames.slice(0, 5),
+    ingredients,
     steps: [],
     cachedAt: Date.now(),
   };

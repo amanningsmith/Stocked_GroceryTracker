@@ -44,8 +44,10 @@ export const SCHEMA = [
     weekId TEXT NOT NULL,
     date TEXT NOT NULL,                -- ISO date of the specific day
     slot TEXT NOT NULL,               -- "lunch" | "dinner"
-    recipeId TEXT NOT NULL,
-    servings INTEGER NOT NULL DEFAULT 2
+    recipeId TEXT NOT NULL,           -- '__custom__' for manually entered meals
+    servings INTEGER NOT NULL DEFAULT 2,
+    customTitle TEXT,                  -- only set when recipeId = '__custom__'
+    customIngredients TEXT             -- JSON string[] for custom meal ingredients
   );`,
 
   `CREATE TABLE IF NOT EXISTS shopping_line (
@@ -81,4 +83,11 @@ export const SCHEMA = [
   );`,
 
   // Settings live in Capacitor Preferences, not SQLite (Spoonacular key, units, etc.).
+];
+
+// ALTER TABLE migrations for existing installs. Wrapped in try/catch at runtime
+// so re-runs on repeated app opens don't crash ("duplicate column" is swallowed).
+export const MIGRATIONS = [
+  `ALTER TABLE meal_entry ADD COLUMN customTitle TEXT`,
+  `ALTER TABLE meal_entry ADD COLUMN customIngredients TEXT`,
 ];

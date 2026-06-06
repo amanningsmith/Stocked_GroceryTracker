@@ -1,41 +1,42 @@
 import { useState, useEffect } from 'react';
 import { isFavorite, toggleFavorite } from '../state/store';
+import { placeholderGradient } from '../lib/colorUtil';
 
-// Compact, defined row-card (style guide: Recipe row, MVP1).
-// 54px thumb (or cuisine-initial tile for imported/no-photo), Fraunces name,
-// meta line, macro-contributor pills, favorite + add-to-week on the right rail.
 export default function RecipeRow({ recipe, onOpen, onAdd, onDelete, delay = 0 }) {
   const [fav, setFav] = useState(false);
   useEffect(() => { isFavorite(recipe.id).then(setFav); }, [recipe.id]);
 
-  const initial = (recipe.cuisine || recipe.name || '?').trim()[0]?.toUpperCase() || '?';
+  const initial = (recipe.name || recipe.cuisine || '?').trim()[0]?.toUpperCase() || '?';
   const macros = (recipe.macroContributors || []).slice(0, 4);
 
   return (
     <div
       className="card liftable fade-in"
-      style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 'var(--gap-row)', animationDelay: `${delay}ms` }}
+      style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 'var(--gap-row)', animationDelay: `${delay}ms`, padding: 12 }}
       onClick={() => onOpen?.(recipe)}
     >
-      {recipe.image ? (
-        <img src={recipe.image} alt="" width={54} height={54}
-          style={{ borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
-      ) : (
-        <div style={{
-          width: 54, height: 54, borderRadius: 10, flexShrink: 0,
-          background: 'var(--bg-page)', border: '1px solid var(--border-hairline)',
-          display: 'grid', placeItems: 'center',
-          fontFamily: 'var(--font-display)', color: 'var(--text-secondary)', fontSize: 22,
-        }}>{initial}</div>
-      )}
+      {/* Thumbnail — 80×80, rounded, gradient fallback */}
+      <div style={{ width: 80, height: 80, borderRadius: 12, flexShrink: 0, overflow: 'hidden' }}>
+        {recipe.image ? (
+          <img src={recipe.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <div style={{
+            width: '100%', height: '100%',
+            background: placeholderGradient(recipe.name),
+            display: 'grid', placeItems: 'center',
+            color: '#fff', fontSize: 28, fontWeight: 700,
+            letterSpacing: -1,
+          }}>{initial}</div>
+        )}
+      </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 16 }}>{recipe.name}</span>
-          {recipe.source === 'imported' && <span className="pill tag-sage">imported</span>}
-          {recipe.source === 'spoonacular' && <span className="pill tag-terra">spoonacular</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+          <span style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.2 }}>{recipe.name}</span>
+          {recipe.source === 'imported'    && <span className="pill tag-sage">imported</span>}
+          {recipe.source === 'spoonacular' && <span className="pill tag-terra">API</span>}
         </div>
-        <div className="meta" style={{ margin: '2px 0 6px' }}>
+        <div className="meta" style={{ marginBottom: 7 }}>
           {[recipe.cuisine, recipe.totalTimeMinutes && `${recipe.totalTimeMinutes} min`, recipe.difficulty]
             .filter(Boolean).join(' · ')}
         </div>
@@ -46,16 +47,16 @@ export default function RecipeRow({ recipe, onOpen, onAdd, onDelete, delay = 0 }
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', paddingLeft: 4 }}>
         <button
           aria-label="favorite"
           onClick={(e) => { e.stopPropagation(); toggleFavorite(recipe.id, recipe).then(setFav); }}
-          style={{ background: 'none', border: 'none', fontSize: 20, lineHeight: 1, color: fav ? 'var(--accent)' : 'var(--icon-inactive)' }}
+          style={{ background: 'none', border: 'none', fontSize: 22, lineHeight: 1, color: fav ? 'var(--accent)' : 'var(--icon-inactive)' }}
         >{fav ? '♥' : '♡'}</button>
         <button
           aria-label="add to week"
           onClick={(e) => { e.stopPropagation(); onAdd?.(recipe); }}
-          style={{ background: 'none', border: 'none', fontSize: 22, lineHeight: 1, color: 'var(--icon-inactive)' }}
+          style={{ background: 'none', border: 'none', fontSize: 24, lineHeight: 1, color: 'var(--icon-inactive)' }}
         >+</button>
         {recipe.source === 'imported' && (
           <button

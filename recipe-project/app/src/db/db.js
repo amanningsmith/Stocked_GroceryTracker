@@ -1,6 +1,6 @@
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import { Capacitor } from '@capacitor/core';
-import { SCHEMA } from './schema';
+import { SCHEMA, MIGRATIONS } from './schema';
 
 // Single shared connection for the app. SQLite is the source of truth for all
 // user data (recipes cache, weeks, meals, shopping, pantry, cook logs).
@@ -12,7 +12,7 @@ let db = null;
 // JSON columns that should be parsed on read / stringified on write.
 const JSON_COLS = new Set([
   'dietaryTags', 'macroContributors', 'ingredients', 'steps',
-  'fromRecipes', 'photos',
+  'fromRecipes', 'photos', 'customIngredients',
 ]);
 
 export async function initDb() {
@@ -41,6 +41,9 @@ export async function initDb() {
 
   await db.open();
   for (const stmt of SCHEMA) await db.execute(stmt);
+  for (const stmt of MIGRATIONS) {
+    try { await db.execute(stmt); } catch { /* column already exists on upgrade */ }
+  }
   if (Capacitor.getPlatform() === 'web') await sqlite.saveToStore(DB_NAME);
   return db;
 }

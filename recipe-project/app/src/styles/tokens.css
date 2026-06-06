@@ -1,40 +1,55 @@
-/* Design tokens — locked from RECIPE_APP_STYLE_GUIDE.md.
-   "Cozy & defined": white cards on warm cream, espresso-tinted shadow + hairline.
-   All colors are absolute (fixed light theme, no dark mode in v1). */
+/* Design tokens — "Cozy & Defined" warm style guide.
+   Espresso + terracotta primary, earthy forest green as complement.
+   Fraunces display headings, DM Sans UI body. Fixed light theme. */
 
 :root {
-  /* ---- Color ---- */
-  --bg-page: #FBF4E9;        /* warm cream app background */
-  --bg-card: #FFFFFF;        /* card / row surface */
-  --text-primary: #3A2E26;   /* espresso — headings + body */
-  --text-secondary: #8A7B6E; /* warm taupe — metadata, muted labels */
-  --text-hint: #A89B8C;      /* placeholder, disabled */
-  --accent: #C65D3B;         /* terracotta — accents, active states, favorited heart */
-  --accent-strong: #B0502E;  /* darker terracotta — button fills behind white text (AA) */
-  --accent-dark: #9A4023;    /* text on terracotta tint */
-  --accent-tint: #F6E3DA;    /* active chip / terracotta tag background */
-  --secondary: #7C8654;      /* sage — secondary accent, success, secondary tags */
-  --secondary-dark: #4A512F; /* text on sage tint */
-  --secondary-tint: #E9EDDC; /* sage tag background */
-  --border-hairline: #ECE3D5;/* card borders, dividers */
-  --border-chip: #E3D8C8;    /* inactive filter chip outline */
-  --icon-inactive: #C9BCAB;  /* unselected icons */
+  /* ---- Surfaces ---- */
+  --bg-page: #FBF4E9;          /* warm cream app background */
+  --bg-card: #FFFFFF;          /* white card surface */
 
-  /* ---- Type ---- */
+  /* ---- Text ---- */
+  --text-primary: #3A2E26;     /* espresso */
+  --text-secondary: #8A7B6E;   /* warm taupe */
+  --text-hint: #A89B8C;        /* placeholder / disabled */
+
+  /* ---- Terracotta — PRIMARY: buttons, nav active, hearts, active states ---- */
+  --accent: #C65D3B;
+  --accent-strong: #B0502E;    /* button fills (AA on white) */
+  --accent-dark: #9A4023;      /* text on tint */
+  --accent-tint: #F6E3DA;      /* active chip bg, tag backgrounds */
+
+  /* ---- Sage — secondary tags, success, imported badge ---- */
+  --secondary: #7C8654;
+  --secondary-dark: #4A512F;
+  --secondary-tint: #E9EDDC;
+
+  /* ---- Forest green — complement accent, chip active, input focus ---- */
+  --forest: #4A6B3C;
+  --forest-strong: #38532D;
+  --forest-dark: #263C1E;
+  --forest-tint: #DCE9D4;
+
+  /* ---- Borders & icons ---- */
+  --border-hairline: #ECE3D5;
+  --border-chip: #E3D8C8;
+  --icon-inactive: #C9BCAB;
+
+  /* ---- Typography ---- */
   --font-display: 'Fraunces', Georgia, serif;
   --font-body: 'DM Sans', system-ui, sans-serif;
 
-  /* ---- Elevation ---- */
-  --shadow-rest: 0 3px 10px rgba(58, 46, 38, 0.10);
-  --shadow-hover: 0 6px 16px rgba(58, 46, 38, 0.15);
+  /* ---- Elevation — warm layered shadows ---- */
+  --shadow-rest:  0 1px 3px rgba(58, 46, 38, 0.07), 0 4px 14px rgba(58, 46, 38, 0.09);
+  --shadow-hover: 0 2px 6px rgba(58, 46, 38, 0.10), 0 10px 28px rgba(58, 46, 38, 0.14);
+  --shadow-nav:   0 -3px 14px rgba(58, 46, 38, 0.08);
 
   /* ---- Shape ---- */
-  --radius-card: 12px;
+  --radius-card: 14px;
   --radius-input: 10px;
   --radius-pill: 999px;
 
   /* ---- Spacing ---- */
-  --pad-card: 13px;
+  --pad-card: 14px;
   --pad-page: 17px;
   --gap-row: 10px;
 }
