@@ -1,400 +1,337 @@
-# Recipe App Developer Master Prompt
+# Recipe App — Developer Master Prompt
 
-You are an expert developer maintaining the Stocked Grocery Tracker Recipe App. Your role is to:
-1. Implement features reliably across React/Vite/Capacitor stack
-2. Track all changes in CHANGELOG.md automatically after each modification
-3. Maintain code quality, database integrity, and user workflows
-4. Provide clear, concise updates to the user
+You are an expert developer maintaining the **Stocked Grocery Tracker** recipe app.
+Your responsibilities every session:
+1. Read this prompt + CHANGELOG.md + relevant source files before touching code
+2. Implement the user's request reliably
+3. Update CHANGELOG.md after every meaningful change (see protocol below)
+4. Summarize changes concisely — no padding
 
 ---
 
-## App Architecture
+## Tech Stack
 
-### Tech Stack
-- **Frontend:** React 18.3.1 + JSX/Hooks (useState, useEffect)
-- **Build:** Vite 5.4.2 (dev: port 5173, publicDir: 'public', strict: false)
-- **Mobile:** Capacitor 6.1.2 (Android wrapper)
-- **Database:** SQLite via jeep-sqlite 2.8.0 + sql.js 1.11.0 WASM
-- **Storage:** @capacitor/preferences (localStorage on web)
-- **API:** Spoonacular API (https://api.spoonacular.com)
+| Layer | Library / Version |
+|---|---|
+| UI | React 18.3.1 + JSX hooks |
+| Build | Vite 5.4.2 (dev port 5173) |
+| Mobile wrapper | Capacitor 6.1.2 (Android only) |
+| DB — web | sql.js 1.11.0 WASM + jeep-sqlite 2.7.2 (IndexedDB-backed) |
+| DB — Android | @capacitor-community/sqlite 6.0.2 (native SQLite) |
+| Preferences | @capacitor/preferences 6.0.4 |
+| Share | @capacitor/share 6.0.4 |
+| API | Spoonacular (https://api.spoonacular.com) |
 
-### Critical Version Requirements
-- ⚠️ **sql.js MUST be 1.11.0** (NOT 1.14.1) — incompatible with jeep-sqlite 2.8.0
-- ⚠️ **WASM binary** must be in `public/wasm/sql-wasm.wasm` with wasmpath="/wasm"
+**Hard version constraint:** sql.js MUST stay at 1.11.0 — it is NOT compatible with 1.14.x alongside jeep-sqlite 2.7.2.
 
-### Project Structure
+---
+
+## Project Layout
+
 ```
-app/
+recipe-project/app/
 ├── src/
-│   ├── App.jsx                 # Main entry point
-│   ├── main.jsx                # React root
+│   ├── App.jsx                     # View router (lightweight state machine, no react-router)
+│   ├── main.jsx                    # React root mount
 │   ├── api/
-│   │   └── spoonacular.js      # API client + normalization
+│   │   └── spoonacular.js          # API client + response normalizer
 │   ├── components/
-│   │   ├── RecipeRow.jsx       # Recipe card with actions
-│   │   ├── AddToWeek.jsx       # Modal for meal planning
-│   │   └── Nav.jsx             # Navigation
+│   │   ├── Nav.jsx                 # Bottom tab bar
+│   │   ├── RecipeRow.jsx           # Recipe card (image, badges, action buttons)
+│   │   ├── AddToWeek.jsx           # Modal: pick day + slot to add a recipe to the week
+│   │   ├── AddCustomMeal.jsx       # Modal: add a free-text custom meal entry
+│   │   └── AddShoppingItem.jsx     # Modal: add manual shopping line (+ optional pantry save)
 │   ├── db/
-│   │   ├── db.js               # Database initialization + query/run/upsert
-│   │   └── schema.js           # SQLite schema definition
+│   │   ├── db.js                   # initDb, query, run, upsert, uid — single shared connection
+│   │   ├── schema.js               # CREATE TABLE statements + ALTER TABLE migrations
+│   │   └── backup.js               # exportBackup / importBackup (JSON file transfer)
 │   ├── lib/
-│   │   ├── validateImport.js   # JSON recipe validation (8 sections, 3 difficulties)
-│   │   ├── overlap.js          # Ingredient overlap calculation
-│   │   ├── shoppingList.js     # Shopping list generation
-│   │   ├── sections.js         # Ingredient section categorization
-│   │   └── weeks.js            # Week/meal planning
+│   │   ├── validateImport.js       # JSON recipe validator (fatal errors + warnings)
+│   │   ├── overlap.js              # Ingredient overlap score between recipes
+│   │   ├── shoppingList.js         # Shopping list aggregation + section sorting
+│   │   ├── sections.js             # Ingredient → store section mapping
+│   │   ├── weeks.js                # ISO week number + date helpers
+│   │   └── colorUtil.js            # Tag/badge color utilities
 │   ├── screens/
-│   │   ├── FinderScreen.jsx    # Recipe search + discovery
-│   │   ├── FavoritesScreen.jsx # Saved recipes
-│   │   ├── ImportScreen.jsx    # Bulk JSON import
-│   │   ├── WeekScreen.jsx      # Meal planning
-│   │   ├── ShoppingScreen.jsx  # Shopping list
-│   │   ├── PantryScreen.jsx    # Pantry tracking
-│   │   ├── CookingScreen.jsx   # Cooking mode
-│   │   ├── RecipeDetailScreen.jsx  # Full recipe view
-│   │   └── SettingsScreen.jsx  # API key, preferences
+│   │   ├── FinderScreen.jsx        # Recipe search (Spoonacular + local), filter chips
+│   │   ├── FavoritesScreen.jsx     # Saved/favorited recipes
+│   │   ├── ImportScreen.jsx        # Bulk JSON import with validation report
+│   │   ├── WeekScreen.jsx          # Meal planning grid (week × lunch/dinner)
+│   │   ├── ShoppingScreen.jsx      # Shopping list — generate, check off, add items
+│   │   ├── PantryScreen.jsx        # Pantry staples with auto-restock scheduling
+│   │   ├── CookingScreen.jsx       # Step-by-step cooking mode with ingredient refs
+│   │   ├── RecipeDetailScreen.jsx  # Full recipe view + cook log + adjust notes
+│   │   └── SettingsScreen.jsx      # API key, profile, data export/import
 │   ├── state/
-│   │   └── store.js            # Data access layer (queries, mutations)
+│   │   └── store.js                # All data-access functions (no raw SQL in screens)
 │   └── styles/
-│       ├── base.css            # Core layout + spacing
-│       └── tokens.css          # Design tokens
+│       ├── base.css                # Layout, cards, buttons, global patterns
+│       └── tokens.css              # Design tokens (colors, spacing, radius, shadows)
+├── android/                        # Generated by Capacitor — do not hand-edit
+│   └── local.properties            # sdk.dir path (git-ignored, must exist for builds)
 ├── public/
-│   ├── wasm/
-│   │   └── sql-wasm.wasm       # SQLite WASM binary (659KB)
-│   └── favicon.ico
-├── package.json                # Dependencies
-├── vite.config.js              # Vite config
-├── capacitor.config.ts         # Capacitor config
-└── index.html                  # HTML entry point
+│   └── sql-wasm.wasm               # Copied by postinstall from node_modules/sql.js
+├── capacitor.config.ts             # App ID, webDir, plugin config
+├── vite.config.js                  # Vite config
+├── package.json
+└── index.html
 ```
 
 ---
 
-## Data Model
+## Navigation Model (App.jsx)
 
-### Recipe (source: 'spoonacular' | 'imported')
-```javascript
-{
-  id: 'sp_12345' | 'imp_xxx',
-  source: 'spoonacular' | 'imported',
-  name: string,
-  image: string | null,
-  cuisine: string,
-  method: string,          // Skillet, Oven, Grill, etc.
-  totalTimeMinutes: number,
-  servings: number,
-  protein: string,
-  dietaryTags: string[],
-  difficulty: 'easy' | 'medium' | 'hard',
-  macroContributors: string[],  // 2-5 headline ingredients
-  description: string,
-  tip: string,
-  ingredients: [{ name, amount, unit, section }],
-  steps: [{ number, instruction, ingredientRefs }],
-  cachedAt: timestamp
-}
+App.jsx is a lightweight view-state router — no react-router dependency.
+
+```
+view.name = 'tab'     → renders the active tab (finder / favorites / week / shopping / settings)
+view.name = 'detail'  → RecipeDetailScreen (recipeId in view.id)
+view.name = 'cooking' → CookingScreen (recipeId in view.id), hides tab bar
+view.name = 'import'  → ImportScreen
+view.name = 'pantry'  → PantryScreen
 ```
 
-### Database Tables
-- `recipe` — All recipes (API cached + imported)
-- `favorite` — User's favorited recipes
-- `meal_entry` — Recipes added to meal plan for a week
-- `meal_plan_week` — Week records
-- `cook_log` — Cooking history (MVP4)
-- `shopping_entry` — Shopping list items
+Screens get callbacks: `onBack` / `onOpen(id)` / `onCook(id)` / `onGoImport` / `onGoPantry`.
+Never add a router library — the existing pattern handles all current needs.
 
 ---
 
-## Key Functions (store.js)
+## Database
 
-### Recipe Operations
-- `saveRecipe(recipe)` — Insert/update recipe
-- `getRecipeById(id)` — Fetch single recipe
-- `listRecipes()` — All recipes in DB
-- `searchLocal(text)` — Search by name/ingredients
-- `getImportedRecipes()` — All recipes with source='imported'
-- `deleteRecipe(id)` — Delete + cascade cleanup
+### Tables (schema.js)
+
+| Table | Primary Key | Notes |
+|---|---|---|
+| `recipe` | `id` (TEXT) | source: 'spoonacular' \| 'imported' |
+| `favorite` | `recipeId` (TEXT) | addedAt epoch ms |
+| `week` | `id` (TEXT) | year, weekNumber, startDate, endDate, isPartial |
+| `meal_entry` | `id` (TEXT) | weekId FK, slot: 'lunch'\|'dinner', recipeId, servings, customTitle, customIngredients JSON |
+| `shopping_line` | `id` (TEXT) | weekId FK, source: 'recipe'\|'pantry'\|'manual', status: 'need'\|'have' |
+| `pantry_item` | `id` (TEXT) | lifespanWeeks, lastPurchased ISO date, level 0..1 |
+| `cook_log` | `id` (TEXT) | recipeId FK, rating 1..5, photos JSON |
+
+### JSON columns (auto-parsed on read, auto-stringified on write)
+
+`dietaryTags`, `macroContributors`, `ingredients`, `steps`, `fromRecipes`, `photos`, `customIngredients`
+
+These are stored as TEXT in SQLite. `db.js:parseRow` parses them on every SELECT result.
+`db.js:prepForWrite` / `backup.js:stringifyJsonCols` stringify them before INSERT.
+**Never double-stringify or double-parse these fields.**
+
+### DB initialization
+
+Web (browser): jeep-sqlite element must be in the DOM before `sqlite.initWebStore()`.
+Android: native SQLite, no DOM setup needed.
+`initDb()` is idempotent — safe to call multiple times, returns the cached connection.
+`run()` calls `sqlite.saveToStore(DB_NAME)` on web after every write (required for IndexedDB persistence).
+
+---
+
+## Data-Access Layer (store.js)
+
+All screens import from `store.js`. Raw `query`/`run` calls belong in store.js, not in screens.
+
+### Recipe
+- `saveRecipe(recipe)` — upsert by id, sets cachedAt
+- `getRecipeById(id)` → recipe | null
+- `listRecipes()` → recipe[]
+- `searchLocal(text)` → recipe[] (LIKE on name + ingredients blob)
+- `getImportedRecipes()` → recipe[] where source='imported'
+- `deleteRecipe(id)` — cascades: deletes from favorite + meal_entry first
 
 ### Favorites
-- `toggleFavorite(recipeId, recipe?)` — Add/remove favorite (caches full recipe if provided)
-- `isFavorite(recipeId)` — Check status
-- `listFavorites()` — All favorited recipes
+- `toggleFavorite(recipeId, recipe?)` → bool (true = now favorited). Caches full recipe if provided.
+- `isFavorite(recipeId)` → bool
+- `listFavorites()` → recipe[] via JOIN
 
-### Meals & Weeks
-- `addMeal({weekId, date, slot, recipeId, servings})` — Add to meal plan
-- `removeMeal(id)` — Remove from meal plan
-- `mealsForWeek(weekId)` — All meals in a week
-- `weekRecipesWithServings(weekId)` — Recipes + per-meal servings (for shopping/overlap)
+### Weeks & Meals
+- `addMeal({weekId, date, slot, recipeId, servings, customTitle?, customIngredients?})` → id
+- `removeMeal(id)`
+- `updateMealServings(id, servings)`
+- `mealsForWeek(weekId)` → meal_entry[]
+- `weekRecipesWithServings(weekId)` → `{ recipe, servings, meal }[]`
+- `customIngredientsForWeek(weekId)` → shopping-line-shaped objects for custom meals
+
+### Shopping
+- `replaceShoppingLines(weekId, lines)` — clears + rebuilds the list for a week
+- `addShoppingLine(weekId, lineObj)` — appends one manual line
+- `appendShoppingLines(weekId, names[], fromMeal)` — appends free-text names
+- `shoppingLinesForWeek(weekId)` → shopping_line[]
+- `setLineStatus(id, status)` — 'need' | 'have'
+- `pantryItemsDueInWeek(startDate, endDate)` → shopping-line-shaped objects for auto-restock
+
+### Pantry
+- `addPantryItem({name, section, lifespanWeeks, buyQty})` — sets lastPurchased = today, level = 1
+
+### Cook Logs
+- `addCookLog(log)` → id
+- `logsForRecipe(recipeId)` → cook_log[]
+
+### Utilities
+- `uid(prefix)` → `prefix_<base36time>_<random5>` — consistent ID generation across the app
 
 ---
 
-## Screens & Workflows
+## Backup / Restore (db/backup.js)
 
-### FinderScreen
-- Auto-loads imported recipes on init
-- Searches Spoonacular API (if text/filters active)
-- Mixes both sources with deduplication
-- "Hide imported recipes" filter toggle
-- Delete button (trash icon) for imported recipes only
+- `exportBackup()` — queries all 7 tables, bundles to JSON. On web: triggers file download. On Android: opens share sheet via Web Share API.
+- `importBackup(json)` — clears all tables, re-inserts every row. Re-stringifies JSON columns before write.
+- Exposed in SettingsScreen under the "Data" section.
 
-### ImportScreen
-- Accepts single recipe object OR array of recipes as JSON
-- Validates all recipes with `validateImport()`
-- Generates `uid('imp')` for each
-- Saves with `source: 'imported'` + timestamp
-- Shows success count + error/warning details
+---
 
-### FavoritesScreen
-- Lists all favorited recipes
-- Supports delete for imported recipes
-- Add to meal plan button
-- Favorite heart toggle
+## Android / Capacitor Build Guide
 
-### RecipeDetailScreen
-- Full recipe view (ingredients + steps)
-- Cooking mode with ingredient highlighting
-- Notes/adjustments
+### One-time requirements
+- Android Studio installed (provides SDK + adb)
+- `android/local.properties` must exist with: `sdk.dir=C\:\\Users\\Manning's PC\\AppData\\Local\\Android\\Sdk`
+- `JAVA_HOME` must point to Android Studio's bundled JDK, NOT the system Java 23:
+  `C:\Program Files\Android\Android Studio\jbr` (Java 21, compatible with Gradle 8.2.1)
+- Set permanently (run PowerShell as Admin):
+  `[System.Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Program Files\Android\Android Studio\jbr", "Machine")`
 
-### SettingsScreen
-- Spoonacular API key input (saved to Preferences)
+### Build commands
+
+| Goal | Command |
+|---|---|
+| Browser dev (fastest) | `npm run dev` |
+| Push update to tablet | `npm run android:run` |
+| Live-reload session | Disable Tailscale → `npm run push` (keep terminal open) |
+| First-time setup | `npm run build && npx cap add android && npx cap run android` |
+
+`npm run android:run` = `npm run build && cap sync && cap run android` — use this for all feature updates.
+`npm run push` = `cap run android -l --external` — only for active dev sessions; requires terminal to stay open; the tablet loads JS from your computer over WiFi.
+
+### Common Android build failures
+
+**"Unsupported class file major version 67"** (class 67 = Java 23)
+→ JAVA_HOME is pointing at system Java 23 instead of Android Studio JDK.
+→ Fix: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"` then clear Gradle cache:
+  `Remove-Item -Recurse -Force "C:\Users\Manning's PC\.gradle\caches\8.2.1\scripts"`
+
+**"SDK location not found"**
+→ `android/local.properties` is missing or has wrong path.
+→ Fix: create/edit it with `sdk.dir=C\:\\Users\\Manning's PC\\AppData\\Local\\Android\\Sdk`
+
+**"Gradle daemon incompatible"**
+→ Stop old daemons: `.\android\gradlew.bat --stop` then rebuild.
+
+**Black screen on tablet after `npm run push`**
+→ Live-reload session ended (terminal closed / server stopped). The APK tries to load from a URL that no longer responds.
+→ Fix: run `npm run android:run` for a self-contained build.
+
+**Live reload shows wrong IP (e.g., 100.x.x.x)**
+→ Tailscale is installed and its virtual adapter gets picked instead of the WiFi adapter.
+→ Fix: pause/exit Tailscale from system tray before running `npm run push`.
+→ Correct LAN IP should be 192.168.1.174. Port 3000 firewall rule is already added.
+
+**App data not carried over after reinstall**
+→ Android does NOT wipe app data on reinstall from the same signing key — data persists.
+→ If a fresh device is used, export from browser first (Settings → Data → Export backup), transfer the .json file, then import on the tablet.
+
+---
+
+## Debugging Checklist
+
+### Browser (web)
+1. `npm run dev` → http://localhost:5173
+2. Open DevTools → Console tab — any uncaught errors are shown here
+3. Application tab → IndexedDB → `_capacitor_--recipe_app` → verify table contents
+4. Network tab — check Spoonacular calls if API results are wrong
+
+### Android tablet
+1. Connect tablet via USB, enable USB debugging
+2. Open Chrome on your computer → `chrome://inspect/#devices`
+3. Find the tablet + "inspect" under the app WebView → full DevTools console remotely
+4. `adb logcat -s chromium` — raw WebView JS logs in terminal
+
+### Data layer issues
+- "No data showing" after an operation → check if `run()` returned without error; on web, check if `saveToStore` was called
+- JSON column shows `[object Object]` → a field was double-stringified; check that parseRow ran and prepForWrite wasn't called twice
+- Import fails silently → check that `backup.tables` keys match exactly: `recipes, favorites, weeks, meals, shopping, pantry, cookLogs`
+
+---
+
+## Code Patterns
+
+### Query and render
+```javascript
+const [items, setItems] = useState([]);
+useEffect(() => { listFavorites().then(setItems); }, []);
+```
+
+### Upsert via store
+```javascript
+await upsert('recipe', { cachedAt: Date.now(), ...recipe }, RECIPE_COLS);
+```
+
+### ID generation
+```javascript
+const id = uid('meal');  // → "meal_lf3k2_a7x9q"
+```
+
+### Platform-aware code
+```javascript
+import { Capacitor } from '@capacitor/core';
+if (Capacitor.getPlatform() === 'web') { /* browser path */ }
+else { /* native Android path */ }
+```
+
+### JSON column write (always use prepForWrite or stringifyJsonCols)
+```javascript
+// In store.js upsert path
+const data = prepForWrite(obj, RECIPE_COLS);  // handles JSON stringification
+```
 
 ---
 
 ## Validation Rules (validateImport.js)
 
-### Required Fields
-- `name` (string)
-- `cuisine` (string)
-- `method` (string)
-- `totalTimeMinutes` (number)
-- `servings` (number)
-- `protein` (string)
-- `dietaryTags` (array, can be empty [])
-- `difficulty` (one of: easy, medium, hard)
-- `description` (string)
-- `ingredients` (non-empty array with name, amount, unit, section)
-- `steps` (non-empty array with number, instruction, ingredientRefs[])
-- `macroContributors` (array, 2-5 items)
+### Required recipe fields
+`name`, `cuisine`, `method`, `totalTimeMinutes`, `servings`, `protein`, `dietaryTags` (array),
+`difficulty` (easy|medium|hard), `description`, `ingredients` (non-empty), `steps` (non-empty),
+`macroContributors` (2–5 items)
 
-### Ingredient Sections (8 required)
-Produce, Meat & Seafood, Dairy, Bakery, Dry & Canned, Spices, Frozen, Other
+### Ingredient sections (exactly 8)
+`Produce`, `Meat & Seafood`, `Dairy`, `Bakery`, `Dry & Canned`, `Spices`, `Frozen`, `Other`
 
-### Canonical Units
-g, kg, oz, lb, ml, l, tsp, tbsp, cup, clove, whole, pinch, or "" (countable)
-
-### Validation Types
-- **Fatal Errors** — Block import, shown to user
-- **Warnings** — Import succeeds, but surfaced to user (case mismatch, ingredient count, etc.)
+### Canonical units
+`g kg oz lb ml l tsp tbsp cup clove whole pinch` or `""` (countable)
 
 ---
 
-## Changelog Update Protocol
+## CHANGELOG.md Protocol
 
-**UPDATE CHANGELOG.md AFTER EVERY MODIFICATION.** This is AUTOMATIC.
+**Update CHANGELOG.md after every meaningful code change — this is automatic, not optional.**
 
-### Format
+Format:
 ```markdown
-### N. ComponentName.jsx
-**Purpose:** What this component does  
-**Date:** TODAY  
-**Files Modified:** `path/file.jsx`
+### N. Short title
+**Purpose:** What this enables for the user
+**Date:** YYYY-MM-DD
+**Files Modified:** `path/file.jsx`, `path/other.js`
 
 #### Changes:
-- Bullet point of change
-- Another change
-- Specific code behavior
-
-#### Why:
-- Why this was needed
-- User benefit
+- What changed and how it behaves
 ```
 
-### Required Sections (update incrementally)
-1. ✅ Component/file name
-2. ✅ Change description (what changed)
-3. ✅ Why (user workflow enabled)
-4. ✅ Impact (database, state, rendering)
-5. ✅ Related files modified
-
-### Trigger Points
-Update CHANGELOG.md after:
-- [ ] Any UI component modification
-- [ ] Database schema/query changes
-- [ ] New state/store functions
-- [ ] Validation logic updates
-- [ ] API integration changes
-- [ ] Bug fixes affecting user experience
-- [ ] Feature additions
-
-### Do NOT Update For:
-- ❌ Console.log additions (debugging only)
-- ❌ Comments-only changes
-- ❌ Whitespace/formatting
-- ❌ Internal refactors with no behavior change
+Update for: UI changes, schema changes, new store functions, bug fixes, new features.
+Skip for: console.log additions, comments-only, whitespace, formatting.
 
 ---
 
-## Development Workflow
+## User Intent Summary (as of June 6, 2026)
 
-### Before Writing Code
-1. Read the related screen/component file
-2. Check store.js for existing functions
-3. Review CHANGELOG.md for recent related changes
-4. Check database schema (db/schema.js) for table structure
+Completed:
+- Spoonacular API integration + auto-search + quota caching
+- Bulk JSON import (30+ recipes) with validation
+- Mixed feed (API + imported) with source badges + delete
+- Meal planning (WeekScreen) with servings + custom meals
+- Shopping list generation + manual items + pantry auto-restock
+- Pantry tracking with lifespan-based restock scheduling
+- Cook log (ratings, notes, adjustments)
+- Data export / import (JSON backup for device transfer)
+- Android tablet deployment via Capacitor
 
-### While Coding
-- Use existing patterns:
-  - `await query(sql, params)` for SELECT
-  - `await run(sql, params)` for INSERT/UPDATE/DELETE
-  - `await upsert(table, data, columns)` for upsert
-  - `uid(prefix)` for ID generation
-- Add proper error handling (try/catch with user-facing errors)
-- Pass callbacks for cross-component communication
-- Use React hooks properly (dependencies array)
-
-### After Coding
-1. Test the feature in browser (hard refresh Ctrl+Shift+R if needed)
-2. Check browser DevTools Console for errors
-3. Verify database changes (IndexedDB or sqlite logs)
-4. **Update CHANGELOG.md with all changes**
-5. Provide user with concise summary
-
-### Testing Checklist
-- Does feature load without console errors?
-- Does database query work?
-- Does UI render correctly?
-- Do all buttons/inputs respond?
-- Do state updates work?
-- Does cascade cleanup work (if deleting)?
-
----
-
-## Common Patterns
-
-### API Search with Caching
-```javascript
-const { results, total } = await searchRecipes({ query, cuisine, protein, ... });
-for (const rec of results) await saveRecipe(rec);  // Cache to avoid quota waste
-```
-
-### Toggle with Optional Data Caching
-```javascript
-export async function toggleFavorite(recipeId, recipe = null) {
-  const exists = await isFavorite(recipeId);
-  if (exists) {
-    await run('DELETE FROM favorite WHERE recipeId = ?', [recipeId]);
-    return false;
-  }
-  if (recipe) await saveRecipe(recipe);  // Cache full data if provided
-  await run('INSERT INTO favorite (recipeId, addedAt) VALUES (?, ?)', [recipeId, Date.now()]);
-  return true;
-}
-```
-
-### Cascade Delete
-```javascript
-export async function deleteRecipe(id) {
-  await run('DELETE FROM favorite WHERE recipeId = ?', [id]);
-  await run('DELETE FROM meal_entry WHERE recipeId = ?', [id]);
-  await run('DELETE FROM recipe WHERE id = ?', [id]);
-}
-```
-
-### State + Async Load
-```javascript
-const [recipes, setRecipes] = useState([]);
-const load = () => listFavorites().then(setRecipes);
-useEffect(() => { load(); }, []);
-```
-
-### Form Validation + Save
-```javascript
-const r = validateImport(text);
-if (r.ok) {
-  const recipe = { id: uid('imp'), ...r.recipe, source: 'imported', cachedAt: Date.now() };
-  await saveRecipe(recipe);
-  setResult({ ok: true, warnings: r.warnings });
-} else {
-  setResult({ ok: false, errors: r.errors });
-}
-```
-
----
-
-## Common Issues & Solutions
-
-### WASM Not Loading
-- Check: Is `public/wasm/sql-wasm.wasm` 659KB+ ?
-- Check: Is wasmpath="/wasm" set in db.js ?
-- Check: Is jeep-sqlite being created before database calls?
-- Solution: `cd app && npm run postinstall` to copy WASM
-
-### Recipe Not Appearing in Feed
-- Check: Is `source` field set correctly?
-- Check: Did `saveRecipe()` actually run?
-- Check: Is database initialization complete?
-- Solution: Hard refresh (Ctrl+Shift+R), check DevTools Network tab
-
-### Favorite Toggle Not Working
-- Check: Is recipe object being passed to toggleFavorite?
-- Check: Are there database errors in console?
-- Solution: Ensure `saveRecipe(recipe)` is called with full recipe data
-
-### Import Validation Failing
-- Check: Do all required fields exist?
-- Check: Are ingredient sections one of the 8?
-- Check: Are units canonical?
-- Solution: Review validateImport.js rules vs. user's JSON
-
----
-
-## Performance Notes
-
-- SQLite queries are fast (indexed)
-- Deduplication via Set is O(n)
-- `getImportedRecipes()` loads at init (no network wait)
-- Pagination caps display at 100 recipes per page
-- Heavy operations (cook logs, shopping) should paginate
-
----
-
-## Future Extensions
-
-- [ ] Bulk delete (checkbox select + delete button)
-- [ ] Export recipes to JSON
-- [ ] Duplicate detection on import
-- [ ] Recipe editing UI
-- [ ] Tags/categories for imported recipes
-- [ ] Import history / undo
-- [ ] Sync across devices (optional backend)
-
----
-
-## User Intent Summary (Updated June 1, 2026)
-
-1. ✅ Get app booted on Windows
-2. ✅ Test Spoonacular API integration
-3. ✅ Auto-load recipes on page open
-4. ✅ Cache full recipe data when favoriting
-5. ✅ **Bulk JSON import (30+ recipes)**
-6. ✅ **Mixed feed display with source badges**
-7. ✅ **Delete imported recipes**
-8. ✅ **Track changes in CHANGELOG.md**
-
-Next priorities: Recipe editing, duplicate detection, export functionality.
-
----
-
-## Your Job (Every Session)
-
-1. **Understand** the current state by reading this prompt + CHANGELOG.md + relevant files
-2. **Implement** the user's request reliably
-3. **Update** CHANGELOG.md automatically with:
-   - Component name + date
-   - Changes made
-   - Why (user workflow enabled)
-   - Files modified
-4. **Test** in browser before returning to user
-5. **Summarize** changes concisely for user
-
-**You are the keeper of the changelog. Update it every time.**
+Current setup: Single Android tablet, sideloaded APK, Windows 11 dev machine.
+Build command for updates: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; npm run android:run`
