@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { validateImport } from '../lib/validateImport';
-import { saveRecipe, uid } from '../state/store';
+import { saveRecipe, toggleFavorite, uid } from '../state/store';
 import { generateRecipes } from '../api/anthropic';
 
 // Import screen (Foundation). Two entry points feed the same validate-and-save pipeline:
@@ -29,6 +29,7 @@ export default function ImportScreen({ onImported }) {
       if (r.ok) {
         const recipe = { id: uid('imp'), image: null, tip: '', ...r.recipe, source: 'imported', cachedAt: Date.now() };
         await saveRecipe(recipe);
+        await toggleFavorite(recipe.id, recipe);
         nextImported.push(recipe);
         setImported(prev => [...prev, recipe]);
         onImported?.(recipe.id);
