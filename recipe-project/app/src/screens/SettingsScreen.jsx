@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Preferences } from '@capacitor/preferences';
 import { exportBackup, importBackup } from '../db/backup';
+import { ensurePermission, checkPermission } from '../lib/thawReminders';
 
 export default function SettingsScreen({ onGoImport, onGoPantry }) {
   const [apiKey, setApiKey] = useState('');
@@ -9,6 +10,9 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
   const [avatar, setAvatar] = useState(null);
   const [flash, setFlash] = useState('');
   const [backupStatus, setBackupStatus] = useState('');
+  const [remindersOn, setRemindersOn] = useState(true);
+  const [reminderHour, setReminderHour] = useState(20);
+  const [permStatus, setPermStatus] = useState(''); // '', 'granted', 'denied'
   const avatarRef = useRef();
   const importFileRef = useRef();
 
@@ -17,6 +21,9 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
     Preferences.get({ key: 'user_name' }).then(({ value }) => setName(value || ''));
     Preferences.get({ key: 'user_email' }).then(({ value }) => setEmail(value || ''));
     Preferences.get({ key: 'user_avatar' }).then(({ value }) => setAvatar(value || null));
+    Preferences.get({ key: 'reminders_on' }).then(({ value }) => setRemindersOn(value !== 'false'));
+    Preferences.get({ key: 'reminder_hour' }).then(({ value }) => setReminderHour(value ? parseInt(value, 10) : 20));
+    checkPermission().then(granted => setPermStatus(granted ? 'granted' : ''));
   }, []);
 
   function showFlash(msg) {
@@ -33,6 +40,22 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
   async function saveKey() {
     await Preferences.set({ key: 'spoonacular_key', value: apiKey.trim() });
     showFlash('API key saved ✓');
+  }
+
+  async function toggleReminders(on) {
+    setRemindersOn(on);
+    await Preferences.set({ key: 'reminders_on', value: String(on) });
+  }
+
+  async function saveReminderHour(h) {
+    const n = Math.max(0, Math.min(23, h));
+    setReminderHour(n);
+    await Preferences.set({ key: 'reminder_hour', value: String(n) });
+  }
+
+  async function requestPermission() {
+    const granted = await ensurePermission();
+    setPermStatus(granted ? 'granted' : 'denied');
   }
 
   async function handleExport() {
@@ -137,6 +160,64 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
           <span>Pantry</span>
           <span style={{ color: 'var(--text-hint)' }}>→</span>
         </button>
+      </div>
+
+      {/* ── Reminders ── */}
+      <SectionLabel>Reminders</SectionLabel>
+      <div className="card" style={{ marginBottom: 16, padding: '0 var(--pad-card)' }}>
+        {/* Master toggle */}
+        <div className="settings-row" style={{ cursor: 'default' }}>
+          <span>Thaw reminders</span>
+          <button
+            onClick={() => toggleReminders(!remindersOn)}
+            style={{
+              background: remindersOn ? 'var(--accent)' : 'var(--border-hairline)',
+              border: 'none', borderRadius: 12, width: 44, height: 24,
+              cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
+              flexShrink: 0,
+            }}
+            aria-label={remindersOn ? 'Disable thaw reminders' : 'Enable thaw reminders'}
+          >
+            <span style={{
+              display: 'block', width: 18, height: 18, borderRadius: '50%', background: '#fff',
+              position: 'absolute', top: 3,
+              left: remindersOn ? 23 : 3,
+              transition: 'left 0.2s',
+            }} />
+          </button>
+        </div>
+
+        {/* Reminder time */}
+        <div className="settings-row" style={{ cursor: 'default', opacity: remindersOn ? 1 : 0.4 }}>
+          <span>Reminder time</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => remindersOn && saveReminderHour(reminderHour - 1)}
+              style={{ background: 'none', border: '1px solid var(--border-hairline)', borderRadius: 4, width: 24, height: 24, cursor: remindersOn ? 'pointer' : 'default', fontSize: 16 }}>−</button>
+            <span style={{ fontSize: 14, fontWeight: 600, minWidth: 42, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+              {String(reminderHour).padStart(2, '0')}:00
+            </span>
+            <button
+              onClick={() => remindersOn && saveReminderHour(reminderHour + 1)}
+              style={{ background: 'none', border: '1px solid var(--border-hairline)', borderRadius: 4, width: 24, height: 24, cursor: remindersOn ? 'pointer' : 'default', fontSize: 16 }}>+</button>
+          </div>
+        </div>
+
+        {/* Permission grant */}
+        <div style={{ padding: '12px 0', borderTop: '1px solid var(--border-hairline)' }}>
+          {permStatus === 'granted' ? (
+            <p className="meta" style={{ margin: 0, color: 'var(--secondary-dark)' }}>Notification permission granted ✓</p>
+          ) : (
+            <>
+              {permStatus === 'denied' && (
+                <p className="meta" style={{ marginBottom: 8, color: 'var(--accent-dark)' }}>Permission denied — open device Settings to re-enable notifications for this app.</p>
+              )}
+              <button className="btn btn-primary" style={{ width: '100%' }} onClick={requestPermission}>
+                Grant notification permission
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ── Data backup ── */}

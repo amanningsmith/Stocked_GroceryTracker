@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { currentWeek, ensureWeeks, daysOf, generateWeeks } from '../lib/weeks';
-import { mealsForWeek, removeMeal, getRecipeById } from '../state/store';
+import { mealsForWeek, removeMeal, getRecipeById, updateMealThawReminder } from '../state/store';
+import { needsThaw } from '../lib/thawReminders';
 import { placeholderGradient } from '../lib/colorUtil';
 import AddCustomMeal from '../components/AddCustomMeal';
 
@@ -11,7 +12,7 @@ export default function WeekScreen({ onOpen }) {
   const [weeks, setWeeks] = useState([]);
   const [week, setWeek] = useState(null);
   const [meals, setMeals] = useState([]);
-  const [recipeData, setRecipeData] = useState({}); // { [recipeId]: { name, image } }
+  const [recipeData, setRecipeData] = useState({}); // { [recipeId]: full recipe object }
   const [customMealTarget, setCustomMealTarget] = useState(null); // ISO date for the + button
 
   useEffect(() => {
@@ -29,13 +30,29 @@ export default function WeekScreen({ onOpen }) {
     setMeals(m);
     const data = {};
     for (const e of m) {
-      if (e.recipeId === '__custom__') continue; // custom meals use stored title directly
+      if (e.recipeId === '__custom__') continue;
       if (!data[e.recipeId]) {
         const r = await getRecipeById(e.recipeId);
-        data[e.recipeId] = { name: r?.name || '(missing recipe)', image: r?.image || null };
+        data[e.recipeId] = r || { name: '(missing recipe)', image: null };
       }
     }
     setRecipeData(data);
+  }
+
+  async function handleThawToggle(meal) {
+    const recipe = recipeData[meal.recipeId] || null;
+    const heuristic = needsThaw(recipe, { ...meal, thawReminder: null });
+    let next;
+    if (meal.thawReminder === null || meal.thawReminder === undefined) {
+      // null: heuristic is source of truth. Override to the opposite.
+      next = heuristic ? 0 : 1;
+    } else {
+      // Explicit override → clear back to heuristic.
+      next = null;
+    }
+    // Optimistic UI update.
+    setMeals(prev => prev.map(m => m.id === meal.id ? { ...m, thawReminder: next } : m));
+    await updateMealThawReminder(meal.id, next, recipe);
   }
 
   if (!week) return <div className="screen"><p className="meta">Loading weeks…</p></div>;
@@ -86,17 +103,18 @@ export default function WeekScreen({ onOpen }) {
                 ) : (
                   slotMeals.map(m => {
                     const isCustom = m.recipeId === '__custom__';
-                    const rd = isCustom ? null : recipeData[m.recipeId];
-                    if (!isCustom && !rd) return null;
-                    const displayName = isCustom ? (m.customTitle || 'Custom meal') : rd.name;
+                    const recipe = isCustom ? null : recipeData[m.recipeId];
+                    if (!isCustom && !recipe) return null;
+                    const displayName = isCustom ? (m.customTitle || 'Custom meal') : recipe.name;
                     const ingCount = isCustom && Array.isArray(m.customIngredients) ? m.customIngredients.length : 0;
+                    const thawActive = !isCustom && needsThaw(recipe, m);
 
                     return (
                       <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                         {/* Thumbnail chip */}
                         <div style={{ width: 40, height: 40, borderRadius: 8, overflow: 'hidden', flexShrink: 0 }}>
-                          {rd?.image ? (
-                            <img src={rd.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          {recipe?.image ? (
+                            <img src={recipe.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           ) : (
                             <div style={{
                               width: '100%', height: '100%',
@@ -107,6 +125,7 @@ export default function WeekScreen({ onOpen }) {
                             </div>
                           )}
                         </div>
+
                         <span
                           onClick={isCustom ? undefined : () => onOpen(m.recipeId)}
                           style={{ cursor: isCustom ? 'default' : 'pointer', flex: 1, fontSize: 14, fontWeight: 500 }}
@@ -117,6 +136,21 @@ export default function WeekScreen({ onOpen }) {
                             : <span className="muted" style={{ fontWeight: 400 }}> · {m.servings} serv</span>
                           }
                         </span>
+
+                        {/* Thaw reminder toggle — only for real recipes */}
+                        {!isCustom && (
+                          <button
+                            onClick={() => handleThawToggle(m)}
+                            title={thawActive ? 'Thaw reminder on — tap to turn off' : 'Thaw reminder off — tap to turn on'}
+                            style={{
+                              background: 'none', border: 'none', padding: '0 2px',
+                              cursor: 'pointer', fontSize: 15, lineHeight: 1,
+                              color: thawActive ? 'var(--accent)' : 'var(--text-hint)',
+                              opacity: thawActive ? 1 : 0.5,
+                            }}
+                          >❄</button>
+                        )}
+
                         <button onClick={() => removeMeal(m.id).then(() => loadMeals(week.id))}
                           style={{ background: 'none', border: 'none', color: 'var(--text-hint)', fontSize: 16, padding: '0 4px', cursor: 'pointer' }}>✕</button>
                       </div>

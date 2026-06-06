@@ -1,5 +1,7 @@
 // Data-access / repository layer. Screens call these instead of touching SQL.
 import { query, run, upsert, uid } from '../db/db';
+import { Preferences } from '@capacitor/preferences';
+import { scheduleForEntry, cancelForEntry, cancelForEntryIds } from '../lib/thawReminders';
 
 const RECIPE_COLS = [
   'id', 'source', 'name', 'image', 'cuisine', 'method', 'totalTimeMinutes',
@@ -32,7 +34,11 @@ export async function getImportedRecipes() {
   return query('SELECT * FROM recipe WHERE source = ? ORDER BY name', ['imported']);
 }
 export async function deleteRecipe(id) {
-  // Delete recipe and any associated favorites/meals
+  // Cancel notifications for every meal entry before the cascade delete.
+  try {
+    const meals = await query('SELECT id FROM meal_entry WHERE recipeId = ?', [id]);
+    await cancelForEntryIds(meals.map(m => m.id));
+  } catch {}
   await run('DELETE FROM favorite WHERE recipeId = ?', [id]);
   await run('DELETE FROM meal_entry WHERE recipeId = ?', [id]);
   await run('DELETE FROM recipe WHERE id = ?', [id]);
@@ -63,6 +69,11 @@ export async function listFavorites() {
 }
 
 // ---- Meal entries ----
+async function reminderHour() {
+  const { value } = await Preferences.get({ key: 'reminder_hour' });
+  return value ? parseInt(value, 10) : 20;
+}
+
 export async function addMeal({ weekId, date, slot, recipeId, servings = 2, customTitle = null, customIngredients = null }) {
   const id = uid('meal');
   await run(
@@ -71,13 +82,47 @@ export async function addMeal({ weekId, date, slot, recipeId, servings = 2, cust
     [id, weekId, date, slot, recipeId, Math.min(servings, 4),
      customTitle, customIngredients ? JSON.stringify(customIngredients) : null],
   );
+
+  // Schedule a thaw reminder if applicable. Non-blocking — a notification
+  // failure must never prevent the meal from being saved.
+  if (recipeId !== '__custom__') {
+    (async () => {
+      try {
+        const recipe = await getRecipeById(recipeId);
+        const entry = { id, date, slot, thawReminder: null, notificationId: null };
+        const hour = await reminderHour();
+        const notifId = await scheduleForEntry(entry, recipe, { hour });
+        if (notifId != null) {
+          await run('UPDATE meal_entry SET notificationId = ? WHERE id = ?', [notifId, id]);
+        }
+      } catch {}
+    })();
+  }
+
   return id;
 }
 export async function removeMeal(id) {
+  // Cancel any pending notification before deleting the row.
+  try { await cancelForEntry({ id, notificationId: null }); } catch {}
   await run('DELETE FROM meal_entry WHERE id = ?', [id]);
 }
 export async function updateMealServings(id, servings) {
   await run('UPDATE meal_entry SET servings = ? WHERE id = ?', [Math.min(servings, 4), id]);
+}
+
+// Toggle thawReminder override (null → heuristic, 0 → off, 1 → on) and reschedule.
+export async function updateMealThawReminder(id, thawReminder, recipe) {
+  await run('UPDATE meal_entry SET thawReminder = ? WHERE id = ?', [thawReminder, id]);
+  (async () => {
+    try {
+      const rows = await query('SELECT * FROM meal_entry WHERE id = ?', [id]);
+      if (!rows[0]) return;
+      const entry = rows[0];
+      const hour = await reminderHour();
+      const notifId = await scheduleForEntry(entry, recipe, { hour });
+      await run('UPDATE meal_entry SET notificationId = ? WHERE id = ?', [notifId ?? null, id]);
+    } catch {}
+  })();
 }
 export async function mealsForWeek(weekId) {
   return query('SELECT * FROM meal_entry WHERE weekId = ? ORDER BY date, slot', [weekId]);

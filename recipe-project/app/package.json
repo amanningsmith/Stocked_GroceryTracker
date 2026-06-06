@@ -21,6 +21,7 @@
     "@capacitor-community/sqlite": "^6.0.1",
     "@capacitor/android": "^6.1.2",
     "@capacitor/core": "^6.1.2",
+    "@capacitor/local-notifications": "^6.1.3",
     "@capacitor/preferences": "^6.0.2",
     "@capacitor/share": "^6.0.2",
     "@rollup/wasm-node": "^4.60.4",

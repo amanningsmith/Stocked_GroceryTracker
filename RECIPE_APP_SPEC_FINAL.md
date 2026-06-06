@@ -29,6 +29,7 @@ No backend, no hosting, no subscription. Everything runs on-device; the only net
 | Connectivity | Always online. Fetched recipes are **cached into SQLite** so re-browsing doesn't re-spend Spoonacular's free-tier daily quota. |
 | Units | Imperial default |
 | Theme | Fixed light/cream (see style guide). No dark mode in v1. |
+| Notifications | `@capacitor/local-notifications` — local-only, no push server. Used for thaw reminders (Idea #2). No-op on web/dev. |
 
 **Normalization layer:** Spoonacular responses are mapped into the same recipe shape as imported recipes (see `RECIPE_IMPORT_FORMAT.md`), so both sources are indistinguishable downstream — same card, same shopping logic, same cooking screen. Spoonacular's *analyzed instructions* endpoint provides per-step ingredients (for cooking-mode highlighting) and aisle data (for shopping-list grouping).
 
@@ -44,7 +45,9 @@ Ingredient    { name, amount, unit, section, isStaple }
 Step          { number, instruction, ingredientRefs[] }
 Favorite      { recipeId, addedAt }
 Week          { id, year, weekNumber, startDate, endDate, isPartial }
-MealEntry     { id, weekId, date, slot: "lunch"|"dinner", recipeId, servings }
+MealEntry     { id, weekId, date, slot: "lunch"|"dinner", recipeId, servings,
+                thawReminder: null|0|1,  -- null=heuristic, 0=off, 1=on
+                notificationId: int|null }
 ShoppingList  { id, weekId, lines[] }
 ShoppingLine  { name, mergedQty, unit, section, status: "need"|"have",
                 fromRecipes[], source: "recipe"|"pantry"|"manual" }
@@ -119,7 +122,12 @@ Accepting a suggestion resets the item's "last purchased" clock.
 ## 6. Additional MVP Ideas (captured, post-core)
 
 - **#1 — Calendar View:** the meal-planning surface for MVP2 (week/month grid, select a day to see its lunch/dinner). Ships *with* MVP2.
-- **#2 — "Lay out the meat" notifications:** native reminder the night before a planned meal needs thawing. Uses Capacitor Local Notifications; depends on MVP2.
+- **#2 — "Lay out the meat" notifications:** **active / building (Jun 6, 2026).** Native reminder the night before a planned meal needs thawing. Uses `@capacitor/local-notifications`; depends on MVP2.
+  - **Trigger:** per-meal `thawReminder` flag. `null` = protein heuristic (beef, chicken, pork, turkey, lamb, fish, seafood, shrimp, duck); `0` = explicitly off; `1` = explicitly on.
+  - **Fire time:** evening before the meal's date, user-configurable (default 20:00 local). No-op if fire time is already past.
+  - **Lunch vs dinner:** both fire the night before in v1 (lunch morning-of reminder is a v2 gap).
+  - **Web:** all plugin calls no-op on web/dev.
+  - **v1 gaps:** multi-day thaw (large cuts), lunch morning-of reminder, bulk reschedule on time change.
 - **#3 — Staple restock reminders:** usage-based pantry depletion alerts (see §5).
 
 ---
@@ -150,7 +158,7 @@ Full details in `RECIPE_APP_STYLE_GUIDE.md`. Direction: **"Cozy & defined"** —
 5. **MVP6** — Cooking Mode (independent of weeks; promotable earlier).
 6. **MVP5** — ingredient-overlap sort.
 7. **Pantry Subsystem** — upgrade static staples to the learning pantry + restock reminders (Idea #3).
-8. **Notifications (Idea #2)** — lay-out-the-meat reminders.
+8. **Notifications (Idea #2)** — lay-out-the-meat reminders. ← **ACTIVE (Jun 6, 2026)**
 9. **MVP4** — cooking history.
 
 ---

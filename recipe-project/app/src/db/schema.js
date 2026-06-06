@@ -90,4 +90,6 @@ export const SCHEMA = [
 export const MIGRATIONS = [
   `ALTER TABLE meal_entry ADD COLUMN customTitle TEXT`,
   `ALTER TABLE meal_entry ADD COLUMN customIngredients TEXT`,
+  `ALTER TABLE meal_entry ADD COLUMN thawReminder INTEGER DEFAULT NULL`,
+  `ALTER TABLE meal_entry ADD COLUMN notificationId INTEGER DEFAULT NULL`,
 ];
