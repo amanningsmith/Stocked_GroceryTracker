@@ -5,6 +5,8 @@ import { ensurePermission, checkPermission } from '../lib/thawReminders';
 
 export default function SettingsScreen({ onGoImport, onGoPantry }) {
   const [apiKey, setApiKey] = useState('');
+  const [anthropicKey, setAnthropicKey] = useState('');
+  const [anthropicModel, setAnthropicModel] = useState('claude-haiku-4-5-20251001');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [avatar, setAvatar] = useState(null);
@@ -18,6 +20,8 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
 
   useEffect(() => {
     Preferences.get({ key: 'spoonacular_key' }).then(({ value }) => setApiKey(value || ''));
+    Preferences.get({ key: 'anthropic_key' }).then(({ value }) => setAnthropicKey(value || ''));
+    Preferences.get({ key: 'anthropic_model' }).then(({ value }) => setAnthropicModel(value || 'claude-haiku-4-5-20251001'));
     Preferences.get({ key: 'user_name' }).then(({ value }) => setName(value || ''));
     Preferences.get({ key: 'user_email' }).then(({ value }) => setEmail(value || ''));
     Preferences.get({ key: 'user_avatar' }).then(({ value }) => setAvatar(value || null));
@@ -40,6 +44,12 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
   async function saveKey() {
     await Preferences.set({ key: 'spoonacular_key', value: apiKey.trim() });
     showFlash('API key saved ✓');
+  }
+
+  async function saveAnthropicKey() {
+    await Preferences.set({ key: 'anthropic_key', value: anthropicKey.trim() });
+    await Preferences.set({ key: 'anthropic_model', value: anthropicModel });
+    showFlash('Claude settings saved ✓');
   }
 
   async function toggleReminders(on) {
@@ -147,6 +157,23 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
         <input className="input" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
           placeholder="Paste your API key" style={{ marginBottom: 10 }} />
         <button className="btn btn-primary" style={{ width: '100%' }} onClick={saveKey}>Save key</button>
+      </div>
+
+      {/* ── Claude AI ── */}
+      <SectionLabel>Claude AI</SectionLabel>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <p className="meta" style={{ marginBottom: 10, lineHeight: 1.5 }}>
+          Used to generate recipes from a natural-language prompt on the Import screen.
+          Set a monthly spend cap in the <span style={{ color: 'var(--accent-dark)' }}>Anthropic console</span> — the key is stored on-device.
+        </p>
+        <input className="input" type="password" value={anthropicKey} onChange={e => setAnthropicKey(e.target.value)}
+          placeholder="Anthropic API key" style={{ marginBottom: 10 }} />
+        <label className="meta" style={{ display: 'block', marginBottom: 6 }}>Model</label>
+        <select className="input" value={anthropicModel} onChange={e => setAnthropicModel(e.target.value)} style={{ marginBottom: 10 }}>
+          <option value="claude-haiku-4-5-20251001">Haiku 4.5 — fast, cheap (recommended)</option>
+          <option value="claude-sonnet-4-6">Sonnet 4.6 — richer recipes, higher cost</option>
+        </select>
+        <button className="btn btn-primary" style={{ width: '100%' }} onClick={saveAnthropicKey}>Save Claude settings</button>
       </div>
 
       {/* ── App ── */}

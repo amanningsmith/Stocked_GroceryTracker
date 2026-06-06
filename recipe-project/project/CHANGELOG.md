@@ -4,6 +4,20 @@ Dated record of what shipped. Newest first. (Format loosely follows Keep a Chang
 
 ## [Unreleased]
 
+### 2. In-app AI recipe generation
+**Purpose:** Generate recipes from a natural-language prompt directly in the app, eliminating the external-paste workflow. Claude returns JSON in the existing import schema, which goes straight through `validateImport()` and saves.
+**Date:** 2026-06-06
+**Files Modified:** `app/src/api/anthropic.js` (new), `app/src/screens/ImportScreen.jsx`, `app/src/screens/SettingsScreen.jsx`, `RECIPE_APP_SPEC_FINAL.md`, `testing/manual/ai-recipe-generation-test-run.md` (new)
+
+#### Changes:
+- **No new npm dependency.** Uses `CapacitorHttp` (built into `@capacitor/core`) for the API call — avoids CORS on Android, no extra package weight.
+- **`anthropic.js`:** new module with `generateRecipes(prompt, count)`. Uses prefill (`'['`) to force a JSON array response and suppress preamble. System prompt pins the two closed enums (`difficulty`, ingredient `section`) as hard rules, and gives recommended lists for `cuisine`/`protein`/`method` so Finder filter chips work on generated recipes. Max tokens scales with count (512 + 1400/recipe). Surfaces `Anthropic API error N` on HTTP errors and "Model returned malformed JSON" on bad parse — nothing is saved on any error path.
+- **`ImportScreen.jsx`:** refactored — `check()` and `handleGenerate()` both call a shared `importRecipes(recipes[])` helper, so generated recipes run through the identical validate-and-save loop as pasted JSON. Generate panel added above the paste box: prompt textarea, count chips (1–5), Generate button with spinner state. Generated JSON is populated into the paste textarea for transparency. Error state shown inline in the card.
+- **`SettingsScreen.jsx`:** new "Claude AI" section — Anthropic API key (password input), model selector (Haiku 4.5 default / Sonnet 4.6 option), helper copy noting the console spend cap. Stored in Preferences as `anthropic_key` and `anthropic_model`.
+- **Spec:** `RECIPE_APP_SPEC_FINAL.md` — "AI in-app: None" row reversed to describe the Anthropic API usage. Keys note updated. §7 notes generated recipes use the identical schema and path. Build order step 9 added.
+- **Model:** default `claude-haiku-4-5-20251001` (structured output, ~600 in + 1.2K out ≈ <$0.01/recipe). Configurable to `claude-sonnet-4-6` for richer quality.
+- **v1 documented gaps:** no streaming (spinner only), no image generation (existing `fetchImageForName` backfills), no in-app cost meter, enum drift between system prompt and `RECIPE_IMPORT_FORMAT.md` must be kept in sync manually.
+
 ### 1. "Lay out the meat" thaw reminders (Idea #2)
 **Purpose:** Native Android notifications remind the user to move frozen meat to the fridge the evening before it's needed, based on the meal plan.
 **Date:** 2026-06-06

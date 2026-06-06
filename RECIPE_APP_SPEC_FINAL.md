@@ -24,14 +24,14 @@ No backend, no hosting, no subscription. Everything runs on-device; the only net
 | Shell | **Capacitor** wrapping a **React** app (reuses web prototype + design system) |
 | Storage | **On-device SQLite** (Capacitor SQLite plugin) — all user data |
 | Recipe data | **Spoonacular API** (primary) + **Import** path for externally AI-generated recipes |
-| AI in-app | **None.** The app never calls an LLM and holds no Anthropic key. AI recipes are generated elsewhere and pasted into the Import screen. |
-| Keys | Spoonacular API key stored in app Settings. Single user. |
+| AI in-app | **Anthropic API (Claude) for recipe generation only.** A natural-language prompt → Claude → JSON → existing import pipeline. Key stored in Settings (single-user, open key accepted; spend capped in the Anthropic console). No other LLM use. |
+| Keys | Spoonacular API key + Anthropic API key stored in app Settings. Single user. Spend cap for Anthropic set in the Anthropic console — not enforced client-side. |
 | Connectivity | Always online. Fetched recipes are **cached into SQLite** so re-browsing doesn't re-spend Spoonacular's free-tier daily quota. |
 | Units | Imperial default |
 | Theme | Fixed light/cream (see style guide). No dark mode in v1. |
 | Notifications | `@capacitor/local-notifications` — local-only, no push server. Used for thaw reminders (Idea #2). No-op on web/dev. |
 
-**Normalization layer:** Spoonacular responses are mapped into the same recipe shape as imported recipes (see `RECIPE_IMPORT_FORMAT.md`), so both sources are indistinguishable downstream — same card, same shopping logic, same cooking screen. Spoonacular's *analyzed instructions* endpoint provides per-step ingredients (for cooking-mode highlighting) and aisle data (for shopping-list grouping).
+**Normalization layer:** Spoonacular responses, imported JSON, and AI-generated recipes are all mapped into the same recipe shape (see `RECIPE_IMPORT_FORMAT.md`), so both sources are indistinguishable downstream — same card, same shopping logic, same cooking screen. Spoonacular's *analyzed instructions* endpoint provides per-step ingredients (for cooking-mode highlighting) and aisle data (for shopping-list grouping).
 
 ---
 
@@ -136,6 +136,8 @@ Accepting a suggestion resets the item's "last purchased" clock.
 
 Imported AI recipes use the fixed JSON schema in `RECIPE_IMPORT_FORMAT.md`. Key fields: `name, source:"imported", cuisine, method, totalTimeMinutes, servings, protein, dietaryTags[], difficulty, macroContributors[], description, ingredients[] {name, amount, unit, section, isStaple}, steps[] {number, instruction, ingredientRefs[]}, tip`. The doc includes a worked example and a copy-paste prompt for generating compliant recipes. Spoonacular recipes normalize into this same shape.
 
+**AI-generated recipes** (via `app/src/api/anthropic.js`) produce JSON in this identical schema and are routed through the same `validateImport()` call — generation is a *source* of import JSON, not a separate path. The system prompt pins the closed enums (`difficulty`, ingredient `section`) and the canonical unit set.
+
 ---
 
 ## 8. Visual Style (summary)
@@ -159,7 +161,8 @@ Full details in `RECIPE_APP_STYLE_GUIDE.md`. Direction: **"Cozy & defined"** —
 6. **MVP5** — ingredient-overlap sort.
 7. **Pantry Subsystem** — upgrade static staples to the learning pantry + restock reminders (Idea #3).
 8. **Notifications (Idea #2)** — lay-out-the-meat reminders. ← **ACTIVE (Jun 6, 2026)**
-9. **MVP4** — cooking history.
+9. **AI recipe generation** — natural-language prompt → Claude → import pipeline. ← **ACTIVE (Jun 6, 2026)**
+10. **MVP4** — cooking history.
 
 ---
 
