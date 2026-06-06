@@ -5,6 +5,21 @@ Feature session implementing bulk recipe import with mixed feed display, source 
 
 ---
 
+## June 6, 2026
+
+### 19. Data export / import (backup & restore)
+**Purpose:** Transfer all app data from the browser to the Android tablet (or between any two devices)  
+**Date:** June 6, 2026  
+**Files Modified:** `app/src/db/backup.js` (new), `app/src/screens/SettingsScreen.jsx`
+
+#### Changes:
+- **`backup.js`** — new utility with two functions:
+  - `exportBackup()`: queries all 6 tables (recipe, favorite, week, meal_entry, shopping_line, pantry_item, cook_log), bundles into a versioned JSON file. On web/browser triggers a file download; on Android opens the native share sheet so the file can be sent to Drive, Files, etc.
+  - `importBackup(json)`: clears all tables then re-inserts every row from the backup file, re-stringifying JSON columns (ingredients, steps, etc.) before writing to SQLite
+- **SettingsScreen** — new "Data" section with **Export backup** and **Import backup** buttons; inline status messages show progress and errors; import uses a hidden `<input type="file">` which works on both browser and Android WebView
+
+---
+
 ## June 5, 2026
 
 ### 18. Shopping list — manual item add + pantry recycling

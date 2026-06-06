@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Preferences } from '@capacitor/preferences';
+import { exportBackup, importBackup } from '../db/backup';
 
 export default function SettingsScreen({ onGoImport, onGoPantry }) {
   const [apiKey, setApiKey] = useState('');
@@ -7,7 +8,9 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
   const [email, setEmail] = useState('');
   const [avatar, setAvatar] = useState(null);
   const [flash, setFlash] = useState('');
+  const [backupStatus, setBackupStatus] = useState('');
   const avatarRef = useRef();
+  const importFileRef = useRef();
 
   useEffect(() => {
     Preferences.get({ key: 'spoonacular_key' }).then(({ value }) => setApiKey(value || ''));
@@ -30,6 +33,32 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
   async function saveKey() {
     await Preferences.set({ key: 'spoonacular_key', value: apiKey.trim() });
     showFlash('API key saved ✓');
+  }
+
+  async function handleExport() {
+    try {
+      setBackupStatus('Exporting…');
+      await exportBackup();
+      setBackupStatus('Export done ✓');
+    } catch (err) {
+      setBackupStatus('Export failed: ' + err.message);
+    }
+    setTimeout(() => setBackupStatus(''), 3000);
+  }
+
+  async function handleImportFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      setBackupStatus('Importing…');
+      const text = await file.text();
+      await importBackup(text);
+      setBackupStatus('Import done ✓ — restart the app to see your data');
+    } catch (err) {
+      setBackupStatus('Import failed: ' + err.message);
+    }
+    e.target.value = '';
+    setTimeout(() => setBackupStatus(''), 5000);
   }
 
   function handleAvatarFile(e) {
@@ -108,6 +137,29 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
           <span>Pantry</span>
           <span style={{ color: 'var(--text-hint)' }}>→</span>
         </button>
+      </div>
+
+      {/* ── Data backup ── */}
+      <SectionLabel>Data</SectionLabel>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <p className="meta" style={{ marginBottom: 12, lineHeight: 1.5 }}>
+          Export saves all your recipes, weeks, meals, pantry, and shopping data to a file.
+          Import loads that file on any device.
+        </p>
+        {backupStatus && (
+          <div style={{ background: 'var(--secondary-tint)', color: 'var(--secondary-dark)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
+            {backupStatus}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleExport}>
+            Export backup
+          </button>
+          <button className="btn" style={{ flex: 1, background: 'var(--bg-page)', border: '1.5px solid var(--border-hairline)' }} onClick={() => importFileRef.current.click()}>
+            Import backup
+          </button>
+        </div>
+        <input ref={importFileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={handleImportFile} />
       </div>
 
       <p className="meta" style={{ marginTop: 8, textAlign: 'center' }}>Units: imperial · Theme: warm cream</p>
