@@ -1,0 +1,40 @@
+# ── Secrets / API keys ────────────────────────────────────────────────────────
+# Scratch files that might hold API keys or curl commands.
+claude.txt
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
+
+# Environment files with actual values (the .env.example in app/ is fine to track).
+.env
+.env.*
+!.env.example
+
+# ── Database / user data files ────────────────────────────────────────────────
+# SQLite database dumps or exports that might contain personal recipe/meal data.
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+
+# ── Android build / machine-specific ─────────────────────────────────────────
+# Contains your SDK path and PC username — never share.
+local.properties
+**/local.properties
+
+# ── OS / editor cruft ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+*.suo
+*.user
+.vscode/*.local
+
+# ── Node / build output ───────────────────────────────────────────────────────
+# node_modules and dist are already covered by recipe-project/app/.gitignore,
+# but including here as a safety net for any future root-level tooling.
+node_modules/
+dist/
