@@ -2,6 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { Preferences } from '@capacitor/preferences';
 import { exportBackup, importBackup } from '../db/backup';
 import { ensurePermission, checkPermission } from '../lib/thawReminders';
+import { getApiEnabled, setApiEnabled, usageSummary, recentCalls, clearUsage } from '../lib/apiUsage';
+
+// Haiku 4.5 pricing ($/M tokens). Update if model pricing changes.
+const COST_RATES = {
+  'claude-haiku-4-5-20251001': { input: 1.00, output: 5.00 },
+  'claude-sonnet-4-6':         { input: 3.00, output: 15.00 },
+};
+
+function estimateCost(inputTokens, outputTokens, model) {
+  const rate = COST_RATES[model] || COST_RATES['claude-haiku-4-5-20251001'];
+  return ((inputTokens || 0) / 1e6) * rate.input + ((outputTokens || 0) / 1e6) * rate.output;
+}
 
 export default function SettingsScreen({ onGoImport, onGoPantry }) {
   const [apiKey, setApiKey] = useState('');
@@ -14,7 +26,17 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
   const [backupStatus, setBackupStatus] = useState('');
   const [remindersOn, setRemindersOn] = useState(true);
   const [reminderHour, setReminderHour] = useState(20);
-  const [permStatus, setPermStatus] = useState(''); // '', 'granted', 'denied'
+  const [permStatus, setPermStatus] = useState('');
+
+  // null = loading (never initialized to a boolean default to avoid the restart-flip bug)
+  const [anthropicOn, setAnthropicOn] = useState(null);
+  const [spoonacularOn, setSpoonacularOn] = useState(null);
+
+  const [summary, setSummary] = useState(null);
+  const [recent, setRecent] = useState([]);
+  const [showRecent, setShowRecent] = useState(false);
+  const [clearConfirm, setClearConfirm] = useState(false);
+
   const avatarRef = useRef();
   const importFileRef = useRef();
 
@@ -28,7 +50,20 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
     Preferences.get({ key: 'reminders_on' }).then(({ value }) => setRemindersOn(value !== 'false'));
     Preferences.get({ key: 'reminder_hour' }).then(({ value }) => setReminderHour(value ? parseInt(value, 10) : 20));
     checkPermission().then(granted => setPermStatus(granted ? 'granted' : ''));
+    // Hydrate toggles from Preferences — never assume a default so the saved position shows
+    getApiEnabled('anthropic').then(setAnthropicOn);
+    getApiEnabled('spoonacular').then(setSpoonacularOn);
+    // Load usage data
+    loadUsage();
   }, []);
+
+  async function loadUsage() {
+    try {
+      const [s, r] = await Promise.all([usageSummary(), recentCalls(25)]);
+      setSummary(s);
+      setRecent(r);
+    } catch {}
+  }
 
   function showFlash(msg) {
     setFlash(msg);
@@ -52,6 +87,12 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
     showFlash('Claude settings saved ✓');
   }
 
+  async function handleToggle(provider, on) {
+    if (provider === 'anthropic') setAnthropicOn(on);
+    else setSpoonacularOn(on);
+    await setApiEnabled(provider, on);
+  }
+
   async function toggleReminders(on) {
     setRemindersOn(on);
     await Preferences.set({ key: 'reminders_on', value: String(on) });
@@ -66,6 +107,13 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
   async function requestPermission() {
     const granted = await ensurePermission();
     setPermStatus(granted ? 'granted' : 'denied');
+  }
+
+  async function handleClearUsage() {
+    await clearUsage();
+    setClearConfirm(false);
+    await loadUsage();
+    showFlash('Usage log cleared ✓');
   }
 
   async function handleExport() {
@@ -108,6 +156,11 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
 
   const initial = (name || 'You').trim()[0].toUpperCase();
 
+  // Aggregate Anthropic stats from summary.totals
+  const anthRow = summary?.totals?.find(t => t.provider === 'anthropic');
+  const spooRow = summary?.totals?.find(t => t.provider === 'spoonacular');
+  const anthCost = anthRow ? estimateCost(anthRow.inputTokens, anthRow.outputTokens, anthropicModel) : 0;
+
   return (
     <div className="screen">
       <h1 className="screen-title">Settings</h1>
@@ -122,7 +175,6 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
       <SectionLabel>Your profile</SectionLabel>
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-          {/* Avatar tap-to-change */}
           <button onClick={() => avatarRef.current.click()} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0 }}>
             <div style={{
               width: 72, height: 72, borderRadius: '50%', overflow: 'hidden',
@@ -139,7 +191,6 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
             <span style={{ display: 'block', textAlign: 'center', fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Change</span>
           </button>
           <input ref={avatarRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarFile} />
-
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <input className="input" placeholder="Your name" value={name} onChange={e => setName(e.target.value)} />
             <input className="input" type="email" placeholder="Email address" value={email} onChange={e => setEmail(e.target.value)} />
@@ -176,6 +227,98 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
         <button className="btn btn-primary" style={{ width: '100%' }} onClick={saveAnthropicKey}>Save Claude settings</button>
       </div>
 
+      {/* ── API Controls ── */}
+      <SectionLabel>API Controls</SectionLabel>
+      <div className="card" style={{ marginBottom: 16, padding: '0 var(--pad-card)' }}>
+        <p className="meta" style={{ padding: '12px 0 4px', lineHeight: 1.5 }}>Off = no calls to this API until turned back on.</p>
+        <ApiToggleRow
+          label="Spoonacular API"
+          value={spoonacularOn}
+          onChange={on => handleToggle('spoonacular', on)}
+        />
+        <ApiToggleRow
+          label="Anthropic (Claude) API"
+          value={anthropicOn}
+          onChange={on => handleToggle('anthropic', on)}
+        />
+      </div>
+
+      {/* ── Usage ── */}
+      <SectionLabel>Usage</SectionLabel>
+      <div className="card" style={{ marginBottom: 16 }}>
+        {summary === null ? (
+          <p className="meta">Loading…</p>
+        ) : (
+          <>
+            {/* Anthropic stats */}
+            <div style={{ marginBottom: 12 }}>
+              <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Anthropic</p>
+              <p className="meta">
+                {anthRow?.calls ?? 0} call{anthRow?.calls !== 1 ? 's' : ''} ·{' '}
+                {(anthRow?.inputTokens ?? 0).toLocaleString()} in / {(anthRow?.outputTokens ?? 0).toLocaleString()} out tokens ·{' '}
+                ~${anthCost.toFixed(4)} est.
+              </p>
+              <p className="meta" style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>Estimated at current model rate — actual billing in the Anthropic console.</p>
+            </div>
+
+            {/* Spoonacular stats */}
+            <div style={{ marginBottom: 12, paddingTop: 10, borderTop: '1px solid var(--border-hairline)' }}>
+              <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Spoonacular</p>
+              <p className="meta">
+                {spooRow?.calls ?? 0} total call{spooRow?.calls !== 1 ? 's' : ''} ·{' '}
+                {summary.spooCallsToday ?? 0} today
+                {summary.spooQuotaLeft != null ? ` · ${summary.spooQuotaLeft} points left` : ''}
+              </p>
+            </div>
+
+            {/* Recent calls collapsible */}
+            <button
+              className="settings-row"
+              onClick={() => { setShowRecent(s => !s); if (!showRecent) loadUsage(); }}
+              style={{ paddingLeft: 0, paddingRight: 0 }}
+            >
+              <span className="meta" style={{ fontWeight: 600 }}>Recent calls ({recent.length})</span>
+              <span style={{ color: 'var(--text-hint)', fontSize: 13 }}>{showRecent ? '▲' : '▼'}</span>
+            </button>
+
+            {showRecent && (
+              <div style={{ maxHeight: 200, overflowY: 'auto', marginTop: 6, marginBottom: 6 }}>
+                {recent.length === 0 ? (
+                  <p className="meta">No calls logged yet.</p>
+                ) : (
+                  recent.map(row => (
+                    <div key={row.id} style={{ fontSize: 11, color: 'var(--text-secondary)', padding: '3px 0', borderBottom: '1px solid var(--border-hairline)', display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                      <span style={{ color: row.ok ? 'var(--secondary-dark)' : 'var(--accent-dark)', flexShrink: 0 }}>{row.ok ? '✓' : '✗'}</span>
+                      <span style={{ flexShrink: 0 }}>{row.ts?.slice(11, 19)}</span>
+                      <span style={{ fontWeight: 600, flexShrink: 0 }}>{row.provider}</span>
+                      <span style={{ color: 'var(--text-hint)', flexShrink: 0 }}>{row.endpoint}</span>
+                      {row.inputTokens != null && <span>{row.inputTokens}↑{row.outputTokens}↓</span>}
+                      {row.quotaLeft != null && <span>{row.quotaLeft} left</span>}
+                      {row.note && <span style={{ color: 'var(--text-hint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.note}</span>}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Clear log */}
+            <div style={{ paddingTop: 10, borderTop: '1px solid var(--border-hairline)' }}>
+              {clearConfirm ? (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span className="meta">Clear all usage data?</span>
+                  <button className="btn" style={{ fontSize: 12, padding: '4px 10px', background: 'var(--accent)', color: '#fff', border: 'none' }} onClick={handleClearUsage}>Clear</button>
+                  <button className="btn" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => setClearConfirm(false)}>Cancel</button>
+                </div>
+              ) : (
+                <button className="btn" style={{ fontSize: 13, padding: '6px 14px' }} onClick={() => setClearConfirm(true)}>
+                  Clear usage log
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
       {/* ── App ── */}
       <SectionLabel>App</SectionLabel>
       <div className="card" style={{ marginBottom: 16, padding: '0 var(--pad-card)' }}>
@@ -192,29 +335,11 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
       {/* ── Reminders ── */}
       <SectionLabel>Reminders</SectionLabel>
       <div className="card" style={{ marginBottom: 16, padding: '0 var(--pad-card)' }}>
-        {/* Master toggle */}
         <div className="settings-row" style={{ cursor: 'default' }}>
           <span>Thaw reminders</span>
-          <button
-            onClick={() => toggleReminders(!remindersOn)}
-            style={{
-              background: remindersOn ? 'var(--accent)' : 'var(--border-hairline)',
-              border: 'none', borderRadius: 12, width: 44, height: 24,
-              cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
-              flexShrink: 0,
-            }}
-            aria-label={remindersOn ? 'Disable thaw reminders' : 'Enable thaw reminders'}
-          >
-            <span style={{
-              display: 'block', width: 18, height: 18, borderRadius: '50%', background: '#fff',
-              position: 'absolute', top: 3,
-              left: remindersOn ? 23 : 3,
-              transition: 'left 0.2s',
-            }} />
-          </button>
+          <PillSwitch on={remindersOn} onChange={toggleReminders} />
         </div>
 
-        {/* Reminder time */}
         <div className="settings-row" style={{ cursor: 'default', opacity: remindersOn ? 1 : 0.4 }}>
           <span>Reminder time</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -230,7 +355,6 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
           </div>
         </div>
 
-        {/* Permission grant */}
         <div style={{ padding: '12px 0', borderTop: '1px solid var(--border-hairline)' }}>
           {permStatus === 'granted' ? (
             <p className="meta" style={{ margin: 0, color: 'var(--secondary-dark)' }}>Notification permission granted ✓</p>
@@ -260,9 +384,7 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
           </div>
         )}
         <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleExport}>
-            Export backup
-          </button>
+          <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleExport}>Export backup</button>
           <button className="btn" style={{ flex: 1, background: 'var(--bg-page)', border: '1.5px solid var(--border-hairline)' }} onClick={() => importFileRef.current.click()}>
             Import backup
           </button>
@@ -271,6 +393,40 @@ export default function SettingsScreen({ onGoImport, onGoPantry }) {
       </div>
 
       <p className="meta" style={{ marginTop: 8, textAlign: 'center' }}>Units: imperial · Theme: warm cream</p>
+    </div>
+  );
+}
+
+// Reusable pill switch. `on` may be null while loading — renders disabled.
+function PillSwitch({ on, onChange, disabled = false }) {
+  const isLoading = on === null;
+  const isOn = on === true;
+  return (
+    <button
+      onClick={() => !isLoading && !disabled && onChange(!isOn)}
+      disabled={isLoading || disabled}
+      style={{
+        background: isLoading ? 'var(--border-hairline)' : isOn ? 'var(--accent)' : 'var(--border-hairline)',
+        border: 'none', borderRadius: 12, width: 44, height: 24,
+        cursor: isLoading || disabled ? 'default' : 'pointer',
+        position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+        opacity: isLoading ? 0.5 : 1,
+      }}
+    >
+      <span style={{
+        display: 'block', width: 18, height: 18, borderRadius: '50%', background: '#fff',
+        position: 'absolute', top: 3, left: isOn && !isLoading ? 23 : 3,
+        transition: 'left 0.2s',
+      }} />
+    </button>
+  );
+}
+
+function ApiToggleRow({ label, value, onChange }) {
+  return (
+    <div className="settings-row" style={{ cursor: 'default' }}>
+      <span>{label}</span>
+      <PillSwitch on={value} onChange={onChange} />
     </div>
   );
 }

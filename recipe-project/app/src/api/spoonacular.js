@@ -11,6 +11,7 @@
 
 import { Preferences } from '@capacitor/preferences';
 import { aisleToSection } from '../lib/sections';
+import { getApiEnabled, logApiCall } from '../lib/apiUsage';
 
 const BASE = 'https://api.spoonacular.com';
 
@@ -20,20 +21,31 @@ async function apiKey() {
   return value;
 }
 
+// Returns { data, quotaUsed, quotaLeft } so callers can log quota per call.
+// Quota header names verified against Spoonacular API docs; fall back to null if absent.
 async function get(path, params = {}) {
   const key = await apiKey();
   const qs = new URLSearchParams({ ...params, apiKey: key }).toString();
   const res = await fetch(`${BASE}${path}?${qs}`);
   if (res.status === 402) throw new Error('Spoonacular daily quota reached (free tier).');
   if (!res.ok) throw new Error(`Spoonacular ${res.status}: ${res.statusText}`);
-  return res.json();
+  const data = await res.json();
+  return {
+    data,
+    quotaUsed: Number(res.headers.get('X-API-Quota-Used')) || null,
+    quotaLeft: Number(res.headers.get('X-API-Quota-Left')) || null,
+  };
 }
 
 // ---- Finder search (MVP1). Maps our filter UI to complexSearch params. ----
 // filters: { query, protein, cuisine, method, maxTime, diet, mealType, number, offset }
 export async function searchRecipes(filters = {}) {
+  if (!(await getApiEnabled('spoonacular'))) {
+    throw new Error('Spoonacular API is turned off in Settings → API Controls.');
+  }
+
   const params = {
-    number: filters.number ?? 100,            // load 100, +100 per page (spec)
+    number: filters.number ?? 100,
     offset: filters.offset ?? 0,
     addRecipeInformation: true,
     fillIngredients: true,
@@ -43,11 +55,19 @@ export async function searchRecipes(filters = {}) {
   if (filters.diet) params.diet = filters.diet;
   if (filters.mealType) params.type = filters.mealType;
   if (filters.maxTime) params.maxReadyTime = filters.maxTime;
-  // protein/meat type + ingredient search both ride includeIngredients.
   const incl = [filters.protein, filters.ingredient].filter(Boolean);
   if (incl.length) params.includeIngredients = incl.join(',');
 
-  const data = await get('/recipes/complexSearch', params);
+  let result;
+  try {
+    result = await get('/recipes/complexSearch', params);
+  } catch (err) {
+    await logApiCall({ provider: 'spoonacular', endpoint: 'complexSearch', ok: false, note: err.message?.slice(0, 200) });
+    throw err;
+  }
+  const { data, quotaUsed, quotaLeft } = result;
+  await logApiCall({ provider: 'spoonacular', endpoint: 'complexSearch', quotaUsed, quotaLeft, ok: true });
+
   return {
     results: (data.results || []).map(normalizeSearchResult),
     total: data.totalResults || 0,
@@ -58,7 +78,9 @@ export async function searchRecipes(filters = {}) {
 //      Costs 1 quota point; caller should only invoke when recipe.image is null. ----
 export async function fetchImageForName(name) {
   try {
-    const data = await get('/recipes/complexSearch', { query: name, number: 1 });
+    if (!(await getApiEnabled('spoonacular'))) return null;
+    const { data, quotaUsed, quotaLeft } = await get('/recipes/complexSearch', { query: name, number: 1 });
+    await logApiCall({ provider: 'spoonacular', endpoint: 'complexSearch/imageByName', quotaUsed, quotaLeft, ok: true });
     return data.results?.[0]?.image || null;
   } catch {
     return null;
@@ -67,9 +89,28 @@ export async function fetchImageForName(name) {
 
 // ---- Full recipe with ingredients + analyzed instructions (detail/cooking). ----
 export async function getRecipe(id) {
-  const info = await get(`/recipes/${id}/information`, { includeNutrition: false });
-  const analyzed = await get(`/recipes/${id}/analyzedInstructions`, {});
-  return normalizeRecipe(info, analyzed);
+  if (!(await getApiEnabled('spoonacular'))) {
+    throw new Error('Spoonacular API is turned off in Settings → API Controls.');
+  }
+
+  let infoResult, analyzedResult;
+  try {
+    infoResult = await get(`/recipes/${id}/information`, { includeNutrition: false });
+  } catch (err) {
+    await logApiCall({ provider: 'spoonacular', endpoint: 'information', ok: false, note: err.message?.slice(0, 200) });
+    throw err;
+  }
+  await logApiCall({ provider: 'spoonacular', endpoint: 'information', quotaUsed: infoResult.quotaUsed, quotaLeft: infoResult.quotaLeft, ok: true });
+
+  try {
+    analyzedResult = await get(`/recipes/${id}/analyzedInstructions`, {});
+  } catch (err) {
+    await logApiCall({ provider: 'spoonacular', endpoint: 'analyzedInstructions', ok: false, note: err.message?.slice(0, 200) });
+    throw err;
+  }
+  await logApiCall({ provider: 'spoonacular', endpoint: 'analyzedInstructions', quotaUsed: analyzedResult.quotaUsed, quotaLeft: analyzedResult.quotaLeft, ok: true });
+
+  return normalizeRecipe(infoResult.data, analyzedResult.data);
 }
 
 // ---- Normalizers ---------------------------------------------------------
@@ -83,9 +124,6 @@ function dietaryTags(r) {
   return tags;
 }
 
-// Full shape from complexSearch — addRecipeInformation+fillIngredients already returns
-// extendedIngredients with amounts/units/aisle, so we populate ingredients here at no
-// extra quota cost. Steps remain [] until the recipe is opened (analyzedInstructions call).
 function normalizeSearchResult(r) {
   const ingredients = (r.extendedIngredients || []).map((i) => ({
     name: i.nameClean || i.name,
@@ -118,14 +156,13 @@ function normalizeSearchResult(r) {
   };
 }
 
-// Full normalize using /information + /analyzedInstructions.
 function normalizeRecipe(info, analyzed) {
   const ingredients = (info.extendedIngredients || []).map((i) => ({
     name: i.nameClean || i.name,
     amount: i.measures?.us?.amount ?? i.amount ?? null,
     unit: i.measures?.us?.unitShort ?? i.unit ?? '',
     section: aisleToSection(i.aisle),
-    isStaple: false, // Spoonacular has no staple flag; pantry layer refines later
+    isStaple: false,
   }));
 
   const steps = [];
@@ -134,7 +171,6 @@ function normalizeRecipe(info, analyzed) {
       steps.push({
         number: s.number,
         instruction: s.step,
-        // per-step ingredients power cooking-mode highlighting (MVP6)
         ingredientRefs: (s.ingredients || []).map((x) => x.name),
       });
     }
@@ -153,7 +189,7 @@ function normalizeRecipe(info, analyzed) {
     difficulty: 'medium',
     servings: info.servings || 2,
     description: info.summary ? info.summary.replace(/<[^>]+>/g, '') : '',
-    tip: '', // Spoonacular has no equivalent; kept for shape parity with imports
+    tip: '',
     macroContributors: ingredients.map((i) => i.name).slice(0, 5),
     ingredients,
     steps,

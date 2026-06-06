@@ -4,6 +4,19 @@ Dated record of what shipped. Newest first. (Format loosely follows Keep a Chang
 
 ## [Unreleased]
 
+### 3. API usage tracker + per-API kill switches
+**Purpose:** Gives full visibility into Anthropic and Spoonacular API calls (tokens, quota, costs) and lets the user disable either API with a persistent kill switch that survives app restart.
+**Date:** 2026-06-06
+**Files Modified:** `app/src/db/schema.js`, `app/src/lib/apiUsage.js` (new), `app/src/api/anthropic.js`, `app/src/api/spoonacular.js`, `app/src/screens/SettingsScreen.jsx`, `RECIPE_APP_SPEC_FINAL.md`, `testing/manual/api-usage-tracker-test-run.md` (new)
+
+#### Changes:
+- **`schema.js`:** new `api_usage` table added to the `SCHEMA` array (new installs create it; existing installs get it on next `initDb()` via `CREATE TABLE IF NOT EXISTS`). Fields: `id` (AUTOINCREMENT), `ts`, `provider`, `endpoint`, `model`, `inputTokens`, `outputTokens`, `quotaUsed`, `quotaLeft`, `ok`, `note`. Index on `ts`.
+- **`apiUsage.js`:** new module. `logApiCall(row)` — inserts a row, wrapped in try/catch so logging never breaks callers. `getApiEnabled(provider)` / `setApiEnabled(provider, enabled)` — Preferences-backed toggle flags defaulting to `true` on first read (default is written explicitly so the value always exists on subsequent reads). `usageSummary()` — aggregate totals per provider + today's Spoonacular call count + latest `quotaLeft`. `recentCalls(limit)` — last N rows ordered by ts desc. `clearUsage()` — truncates the table.
+- **`anthropic.js`:** enable-check at the top of `generateRecipes` (throws "turned off" before any key lookup or network call). Logs on success (`inputTokens`, `outputTokens`, `model`, note = truncated prompt) and on error (`ok=false`, note = error message). Log placed after the HTTP call so tokens are captured from `res.data.usage`.
+- **`spoonacular.js`:** `get()` now returns `{ data, quotaUsed, quotaLeft }` (reads `X-API-Quota-Used` / `X-API-Quota-Left` headers; falls back to null if absent — header names need verification against a real response). Enable-check added at the top of `searchRecipes` and `getRecipe`. `fetchImageForName` silently returns null when disabled (already has try/catch). Each exported function logs per network call; `getRecipe` logs both the `information` and `analyzedInstructions` calls separately.
+- **`SettingsScreen.jsx`:** refactored around the restart-persistence requirement. Toggles initialised to `null` (not `true`) and hydrated from `getApiEnabled()` on mount — the switch never shows the wrong position on relaunch. Extracted `PillSwitch` component (handles null/loading state). New "API Controls" section with Spoonacular and Anthropic toggles. New "Usage" section: Anthropic total calls + token counts + estimated cost (labeled "estimated — actual billing in the Anthropic console"); Spoonacular total calls + calls today + latest quotaLeft; collapsible recent-calls list (25 rows); clear button with inline confirm. `loadUsage()` called on mount and after clear.
+- **v1 documented gaps:** Spoonacular header name casing needs real-response verification; cost is an estimate; log grows unbounded; toggle is manual not a quota cap.
+
 ### 2. In-app AI recipe generation
 **Purpose:** Generate recipes from a natural-language prompt directly in the app, eliminating the external-paste workflow. Claude returns JSON in the existing import schema, which goes straight through `validateImport()` and saves.
 **Date:** 2026-06-06

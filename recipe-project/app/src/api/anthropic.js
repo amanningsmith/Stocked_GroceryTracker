@@ -1,5 +1,6 @@
 import { CapacitorHttp } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
+import { getApiEnabled, logApiCall } from '../lib/apiUsage';
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
@@ -50,6 +51,10 @@ Each recipe object has EXACTLY these fields (no extras, no "source" field):
 - tip: string — one pro tip, or "" if none`;
 
 export async function generateRecipes(userPrompt, count = 1) {
+  if (!(await getApiEnabled('anthropic'))) {
+    throw new Error('Anthropic API is turned off in Settings → API Controls.');
+  }
+
   const { value: key } = await Preferences.get({ key: 'anthropic_key' });
   if (!key?.trim()) throw new Error('No Anthropic API key set — add one in Settings → Claude AI.');
 
@@ -60,36 +65,54 @@ export async function generateRecipes(userPrompt, count = 1) {
   // plus headroom for the system + user prompts.
   const maxTokens = 512 + count * 1400;
 
-  const res = await CapacitorHttp.post({
-    url: ENDPOINT,
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': key.trim(),
-      'anthropic-version': '2023-06-01',
-      // Allows the call to succeed from a browser (web dev) without a proxy.
-      // Harmless on native Android where CORS doesn't apply.
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    data: {
-      model: activeModel,
-      max_tokens: maxTokens,
-      system: SYSTEM,
-      messages: [
-        {
-          role: 'user',
-          content: `Generate ${count} recipe${count === 1 ? '' : 's'}: ${userPrompt}`,
-        },
-        {
-          // Prefill forces the model's response to start inside the JSON array,
-          // eliminating any preamble text. We re-prepend '[' before parsing.
-          role: 'assistant',
-          content: '[',
-        },
-      ],
-    },
+  let res;
+  try {
+    res = await CapacitorHttp.post({
+      url: ENDPOINT,
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key.trim(),
+        'anthropic-version': '2023-06-01',
+        // Allows the call to succeed from a browser (web dev) without a proxy.
+        // Harmless on native Android where CORS doesn't apply.
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      data: {
+        model: activeModel,
+        max_tokens: maxTokens,
+        system: SYSTEM,
+        messages: [
+          {
+            role: 'user',
+            content: `Generate ${count} recipe${count === 1 ? '' : 's'}: ${userPrompt}`,
+          },
+          {
+            // Prefill forces the model's response to start inside the JSON array,
+            // eliminating any preamble text. We re-prepend '[' before parsing.
+            role: 'assistant',
+            content: '[',
+          },
+        ],
+      },
+    });
+  } catch (err) {
+    await logApiCall({ provider: 'anthropic', endpoint: 'messages', model: activeModel, ok: false, note: err.message?.slice(0, 200) });
+    throw err;
+  }
+
+  const u = res.data?.usage || {};
+  const ok = res.status < 400;
+  await logApiCall({
+    provider: 'anthropic',
+    endpoint: 'messages',
+    model: res.data?.model || activeModel,
+    inputTokens: u.input_tokens ?? null,
+    outputTokens: u.output_tokens ?? null,
+    ok,
+    note: ok ? userPrompt.slice(0, 80) : JSON.stringify(res.data).slice(0, 200),
   });
 
-  if (res.status >= 400) {
+  if (!ok) {
     const msg = res.data?.error?.message || JSON.stringify(res.data);
     throw new Error(`Anthropic API error ${res.status}: ${msg}`);
   }

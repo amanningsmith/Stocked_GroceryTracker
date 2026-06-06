@@ -83,6 +83,22 @@ export const SCHEMA = [
   );`,
 
   // Settings live in Capacitor Preferences, not SQLite (Spoonacular key, units, etc.).
+
+  `CREATE TABLE IF NOT EXISTS api_usage (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts           TEXT    NOT NULL,
+    provider     TEXT    NOT NULL,           -- 'anthropic' | 'spoonacular'
+    endpoint     TEXT,
+    model        TEXT,                        -- anthropic only
+    inputTokens  INTEGER,                     -- anthropic only
+    outputTokens INTEGER,                     -- anthropic only
+    quotaUsed    REAL,                         -- spoonacular request points
+    quotaLeft    REAL,                         -- spoonacular quota remaining
+    ok           INTEGER NOT NULL DEFAULT 1,  -- 1 success / 0 error
+    note         TEXT
+  );`,
+
+  `CREATE INDEX IF NOT EXISTS idx_api_usage_ts ON api_usage(ts);`,
 ];
 
 // ALTER TABLE migrations for existing installs. Wrapped in try/catch at runtime

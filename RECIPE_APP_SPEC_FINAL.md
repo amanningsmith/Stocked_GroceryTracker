@@ -30,6 +30,7 @@ No backend, no hosting, no subscription. Everything runs on-device; the only net
 | Units | Imperial default |
 | Theme | Fixed light/cream (see style guide). No dark mode in v1. |
 | Notifications | `@capacitor/local-notifications` — local-only, no push server. Used for thaw reminders (Idea #2). No-op on web/dev. |
+| API governance | Per-call usage logged to SQLite (`api_usage`); per-API enable/disable toggles in Settings (persisted via Preferences, act as kill switches). Anthropic token usage surfaced for cost traceability. Clients check their flag before every network call. |
 
 **Normalization layer:** Spoonacular responses, imported JSON, and AI-generated recipes are all mapped into the same recipe shape (see `RECIPE_IMPORT_FORMAT.md`), so both sources are indistinguishable downstream — same card, same shopping logic, same cooking screen. Spoonacular's *analyzed instructions* endpoint provides per-step ingredients (for cooking-mode highlighting) and aisle data (for shopping-list grouping).
 
@@ -53,6 +54,9 @@ ShoppingLine  { name, mergedQty, unit, section, status: "need"|"have",
                 fromRecipes[], source: "recipe"|"pantry"|"manual" }
 PantryItem    { id, name, section, buyQty, lifespanWeeks, lastPurchased, level }
 CookLog       { id, recipeId, dateMade, rating(1-5), notes, adjustments, photos[] }
+ApiUsage      { id(autoincrement), ts, provider: "anthropic"|"spoonacular",
+                endpoint, model, inputTokens, outputTokens,
+                quotaUsed, quotaLeft, ok: 0|1, note }
 ```
 
 ---
